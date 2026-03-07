@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pip install:*)",
+      "Bash(echo:*)",
+      "Bash(python scripts/evaluate_all.py:*)",
+      "Bash(python scripts/generate_plots.py:*)",
+      "Bash(python:*)",
+      "Bash(test:*)"
+    ]
+  }
+}
