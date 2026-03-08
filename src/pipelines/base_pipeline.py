@@ -22,6 +22,7 @@ Usage example:
 """
 
 from abc import ABC, abstractmethod
+import glob
 import numpy as np
 import torch
 import os
@@ -41,17 +42,33 @@ class BasePipeline(ABC):
     """
 
     def __init__(self, device='cuda', weights_base_dir='KTC2023_SubmissionFiles'):
-        """Initialize the pipeline.
-
-        Args:
-            device: Desired compute device. Falls back to 'cpu' if CUDA is
-                not available.
-            weights_base_dir: Relative path to the directory containing
-                pre-trained model weights.
-        """
         self.device = device if torch.cuda.is_available() else 'cpu'
         self.weights_base_dir = weights_base_dir
         self.model = None
+
+    @staticmethod
+    def _load_state_dict(path, device='cpu'):
+        """Load model state_dict from a file, auto-detecting format.
+
+        Supports both:
+          - Raw state_dict (from original submission weights)
+          - Full training checkpoint (with 'model_state_dict' key)
+        """
+        data = torch.load(path, map_location=device, weights_only=True)
+        if isinstance(data, dict) and 'model_state_dict' in data:
+            return data['model_state_dict']
+        return data
+
+    @staticmethod
+    def _find_weight(candidates):
+        """Return the first existing path from a list of candidates."""
+        for path in candidates:
+            if os.path.exists(path):
+                return path
+        raise FileNotFoundError(
+            f'No weight file found. Searched:\n'
+            + '\n'.join(f'  - {p}' for p in candidates)
+        )
 
     @abstractmethod
     def load_model(self, level: int) -> None:

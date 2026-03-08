@@ -51,8 +51,14 @@ class FCUNetPipeline(BasePipeline):
             max_period=self.config.model.max_period,
         )
 
-        weight_path = f'{self.weights_base_dir}/fcunet_model/model.pt'
-        model.load_state_dict(torch.load(weight_path, map_location=self.device, weights_only=True))
+        weight_path = self._find_weight([
+            # Training checkpoint (best/last)
+            f'{self.weights_base_dir}/best.pt',
+            f'{self.weights_base_dir}/last.pt',
+            # Original submission format
+            f'{self.weights_base_dir}/fcunet_model/model.pt',
+        ])
+        model.load_state_dict(self._load_state_dict(weight_path, self.device))
         model.eval()
         model.to(self.device)
 

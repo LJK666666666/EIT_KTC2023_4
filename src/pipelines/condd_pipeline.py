@@ -8,6 +8,7 @@ a final segmentation via majority voting.
 Reference: programs/ktc2023_conditional_diffusion/main.py
 """
 
+import glob
 import os
 import numpy as np
 import torch
@@ -39,11 +40,45 @@ class CondDPipeline(BasePipeline):
         self._current_level = None
         self.sampler = None
 
+    def _find_condd_model_dir(self, level):
+        """Find the model directory for a given CondD level.
+
+        Searches in order:
+          1. {weights_base_dir}/model_training.pt  (single level result dir)
+          2. {weights_base_dir}/condd_level{level}_*/  (results dir with per-level subdirs)
+          3. {weights_base_dir}/diffusion_models/level_{level}/version_01/  (original submission)
+        """
+        base = self.weights_base_dir
+
+        # 1. Direct: weights_base_dir is a single level's result directory
+        if os.path.exists(os.path.join(base, 'model_training.pt')) or \
+           os.path.exists(os.path.join(base, 'ema_model_training.pt')) or \
+           os.path.exists(os.path.join(base, 'best.pt')):
+            return base
+
+        # 2. Training results: look for condd_level{X}_* dirs
+        pattern = os.path.join(base, f'condd_level{level}_*')
+        matches = sorted(glob.glob(pattern))
+        if matches:
+            return matches[-1]  # latest (highest number)
+
+        # 3. Original submission format
+        submission_dir = os.path.join(
+            base, 'diffusion_models', f'level_{level}', 'version_01')
+        if os.path.exists(submission_dir):
+            return submission_dir
+
+        raise FileNotFoundError(
+            f'No CondD weights found for level {level}. Searched:\n'
+            f'  - {base}/model_training.pt\n'
+            f'  - {pattern}\n'
+            f'  - {submission_dir}')
+
     def load_model(self, level: int) -> None:
         """Load diffusion model for the given level.
 
-        Handles the EMA-only weight loading for levels 1/5/6 where only
-        ema_model_training.pt is available.
+        Supports loading from both training checkpoints and original
+        submission weights.
         """
         torch.manual_seed(self.seed + level)
 
@@ -51,20 +86,24 @@ class CondDPipeline(BasePipeline):
         score = get_standard_score(config=self.config, sde=sde, use_ema=False, load_model=False)
 
         hparams = LEVEL_TO_HPARAMS[level]
-        model_dir = f'{self.weights_base_dir}/diffusion_models/level_{level}/version_01'
+        model_dir = self._find_condd_model_dir(level)
 
         model_path = os.path.join(model_dir, 'model_training.pt')
         ema_path = os.path.join(model_dir, 'ema_model_training.pt')
+        best_path = os.path.join(model_dir, 'best.pt')
 
-        if os.path.exists(model_path):
-            # Normal loading: load model weights, optionally apply EMA
+        if os.path.exists(best_path) and \
+           not os.path.exists(model_path) and not os.path.exists(ema_path):
+            # Training checkpoint only (no separate model_training.pt yet)
+            state_dict = self._load_state_dict(best_path, 'cpu')
+            score.load_state_dict(state_dict)
+        elif os.path.exists(model_path):
             score.load_state_dict(torch.load(model_path, map_location='cpu', weights_only=True))
             if hparams['use_ema'] and os.path.exists(ema_path):
                 ema = ExponentialMovingAverage(score.parameters(), decay=0.999)
                 ema.load_state_dict(torch.load(ema_path, map_location='cpu', weights_only=True))
                 ema.copy_to(score.parameters())
         elif os.path.exists(ema_path):
-            # EMA-only loading (levels 1/5/6): initialise random model, load EMA, copy to model
             ema = ExponentialMovingAverage(score.parameters(), decay=0.999)
             ema.load_state_dict(torch.load(ema_path, map_location='cpu', weights_only=True))
             ema.copy_to(score.parameters())
