@@ -93,11 +93,11 @@ def generate_data(level, num_images, output_dir='dataset',
 
     # Simulate reference measurements
     # Note: SolveForward may return numpy.matrix (2D) due to scipy sparse ops.
-    # Flatten to ensure consistent 1D shape for downstream operations.
+    # Ensure consistent (N, 1) column vector shape to avoid broadcasting issues.
     sigma_bg = np.ones((mesh.g.shape[0], 1)) * 0.745
-    Uelref = np.asarray(solver.SolveForward(sigma_bg, z)).flatten()
+    Uelref = np.asarray(solver.SolveForward(sigma_bg, z)).reshape(-1, 1)
     noise = np.asarray(
-        solver.InvLn * np.random.randn(Uelref.shape[0], 1)).flatten()
+        solver.InvLn * np.random.randn(Uelref.shape[0], 1)).reshape(-1, 1)
     Uelref = Uelref + noise
 
     # Set up linearised reconstructor (only if needed)
@@ -139,15 +139,15 @@ def generate_data(level, num_images, output_dir='dataset',
 
         sigma_gt = image_to_mesh(np.flipud(sigma).T, mesh)
 
-        # Forward simulation with noise (flatten to avoid numpy.matrix issues)
-        Uel_sim = np.asarray(solver.SolveForward(sigma_gt, z)).flatten()
+        # Forward simulation with noise (reshape to column vector)
+        Uel_sim = np.asarray(solver.SolveForward(sigma_gt, z)).reshape(-1, 1)
         noise = np.asarray(
-            solver.InvLn * np.random.randn(Uel_sim.shape[0], 1)).flatten()
+            solver.InvLn * np.random.randn(Uel_sim.shape[0], 1)).reshape(-1, 1)
         Uel_noisy = Uel_sim + noise
 
         if do_meas:
             u_name = f'u_ztm_{idx:06d}.npy'
-            np.save(os.path.join(meas_path, u_name), Uel_noisy)
+            np.save(os.path.join(meas_path, u_name), Uel_noisy.flatten())
 
         # 5 linearised reconstructions (skip if measurements_only)
         if do_reco:

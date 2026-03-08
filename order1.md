@@ -26,4 +26,5 @@ python scripts/evaluate_all.py --methods fcunet --weights-dir results/fcunet_bas
 python scripts/evaluate_all.py --methods postp --weights-dir results/postp_baseline_1/best.pt
 python scripts/evaluate_all.py --methods condd --weights-dir results/condd_baseline_1/best.pt
 
+python scripts/generate_data.py --level 1 --num-images 1000 --save-measurements --output-dir ../drive/MyDrive/dataset
 
