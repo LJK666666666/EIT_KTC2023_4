@@ -106,7 +106,11 @@ class FCUNetTrainer(BaseTrainer):
         sigma_bg = np.ones((mesh.g.shape[0], 1)) * 0.745
         Uelref = np.asarray(solver.SolveForward(sigma_bg, z)).flatten()
 
-        dataset = FCUNetTrainingData(Uelref, solver.InvLn, base_path)
+        # Training dataset (with noise augmentation)
+        train_indices = self.config.data.get('train_indices', None)
+        dataset = FCUNetTrainingData(
+            Uelref, solver.InvLn, base_path,
+            indices=train_indices, augment_noise=True)
         self.train_loader = DataLoader(
             dataset,
             batch_size=self.config.training.batch_size,
@@ -114,12 +118,40 @@ class FCUNetTrainer(BaseTrainer):
             pin_memory=self.config.training.pin_memory,
             num_workers=self.config.training.num_workers)
 
+        # Simulated val/test datasets (no noise augmentation, deterministic)
+        self.val_sim_loader = None
+        self.test_sim_loader = None
+
+        val_indices = self.config.data.get('val_indices', None)
+        if val_indices is not None:
+            val_ds = FCUNetTrainingData(
+                Uelref, solver.InvLn, base_path,
+                indices=val_indices, augment_noise=False)
+            self.val_sim_loader = DataLoader(
+                val_ds,
+                batch_size=self.config.training.batch_size,
+                shuffle=False,
+                pin_memory=self.config.training.pin_memory,
+                num_workers=self.config.training.num_workers)
+
+        test_indices = self.config.data.get('test_indices', None)
+        if test_indices is not None:
+            test_ds = FCUNetTrainingData(
+                Uelref, solver.InvLn, base_path,
+                indices=test_indices, augment_noise=False)
+            self.test_sim_loader = DataLoader(
+                test_ds,
+                batch_size=self.config.training.batch_size,
+                shuffle=False,
+                pin_memory=self.config.training.pin_memory,
+                num_workers=self.config.training.num_workers)
+
         # Pre-compute vincl masks for all levels
         self.vincl_dict = {}
         for lvl in range(1, 8):
             self.vincl_dict[lvl] = create_vincl(lvl, Injref).T.flatten()
 
-        # Validation data
+        # Challenge validation data (original behavior)
         self._load_val_data()
 
     def _load_val_data(self):
@@ -153,8 +185,12 @@ class FCUNetTrainer(BaseTrainer):
     def train_step(self, batch):
         y, gt = batch
 
-        # Random level augmentation
-        levels = np.random.choice(np.arange(1, 8), size=y.shape[0])
+        # Level augmentation: fixed or random
+        fixed_level = self.config.training.get('fixed_level', None)
+        if fixed_level is not None:
+            levels = np.full(y.shape[0], fixed_level)
+        else:
+            levels = np.random.choice(np.arange(1, 8), size=y.shape[0])
         for k in range(y.shape[0]):
             y[k, ~self.vincl_dict[levels[k]]] = 0.0
 
@@ -194,10 +230,27 @@ class FCUNetTrainer(BaseTrainer):
         return {'loss': loss.item()}
 
     def validate(self, epoch):
-        """Validate on challenge test images across all 7 levels."""
-        if self.val_data is None:
-            return {}
+        """Validate on simulated val set (if configured) and/or challenge images."""
+        metrics = {}
 
+        # Simulated val set evaluation (data scaling experiment)
+        if self.val_sim_loader is not None:
+            metrics = self._validate_sim(epoch)
+
+        # Challenge image evaluation (original behavior)
+        if self.val_data is not None:
+            challenge_metrics = self._validate_challenge(epoch)
+            # If sim validation provided the 'score', keep it as primary;
+            # add challenge score under a different key
+            if 'score' in metrics:
+                metrics['challenge_score'] = challenge_metrics.get('score', 0)
+            else:
+                metrics.update(challenge_metrics)
+
+        return metrics
+
+    def _validate_challenge(self, epoch):
+        """Validate on challenge test images across all 7 levels."""
         gt_np = self.val_data['gt']  # (4, 256, 256)
         full_score = 0
 
@@ -225,9 +278,103 @@ class FCUNetTrainer(BaseTrainer):
 
         avg_score = full_score / 7
         self.writer.add_scalar('val/avg_score', avg_score, epoch + 1)
-        print(f'  Val score: {avg_score:.4f} (sum={full_score:.4f})')
+        print(f'  Val(challenge) score: {avg_score:.4f} (sum={full_score:.4f})')
 
         return {'score': avg_score}
+
+    def _validate_sim(self, epoch):
+        """Validate on simulated val set: CE loss + scoring at fixed level."""
+        fixed_level = self.config.training.get('fixed_level', 1)
+        total_loss = 0.0
+        total_score = 0.0
+        num_samples = 0
+
+        for y, gt in self.val_sim_loader:
+            for k in range(y.shape[0]):
+                y[k, ~self.vincl_dict[fixed_level]] = 0.0
+
+            levels_tensor = torch.full(
+                (y.shape[0],), fixed_level,
+                dtype=torch.float, device=self.device)
+            y = y.to(self.device)
+            gt = gt.to(self.device)
+
+            with torch.no_grad():
+                pred = self.model(y, levels_tensor)
+                loss = self.loss_fn(pred, gt)
+            total_loss += loss.item() * y.shape[0]
+
+            pred_argmax = torch.argmax(
+                F.softmax(pred, dim=1), dim=1).cpu().numpy()
+            gt_argmax = torch.argmax(gt, dim=1).cpu().numpy()
+            for i in range(pred_argmax.shape[0]):
+                total_score += FastScoringFunction(
+                    gt_argmax[i], pred_argmax[i])
+            num_samples += y.shape[0]
+
+        avg_loss = total_loss / max(num_samples, 1)
+        avg_score = total_score / max(num_samples, 1)
+
+        self.writer.add_scalar('val_sim/loss', avg_loss, epoch + 1)
+        self.writer.add_scalar('val_sim/score', avg_score, epoch + 1)
+        print(f'  Val(sim) loss: {avg_loss:.5f}, score: {avg_score:.4f}')
+
+        return {'score': avg_score, 'val_loss': avg_loss}
+
+    def evaluate_test(self):
+        """Evaluate best model on simulated test set. Returns loss + score."""
+        if self.test_sim_loader is None:
+            return {}
+
+        import os
+        best_path = os.path.join(self.result_dir, 'best.pt')
+        if not os.path.exists(best_path):
+            best_path = os.path.join(self.result_dir, 'last.pt')
+        self._load_checkpoint(best_path)
+        self.model.eval()
+
+        fixed_level = self.config.training.get('fixed_level', 1)
+        total_loss = 0.0
+        total_score = 0.0
+        num_samples = 0
+
+        with torch.no_grad():
+            for y, gt in self.test_sim_loader:
+                for k in range(y.shape[0]):
+                    y[k, ~self.vincl_dict[fixed_level]] = 0.0
+
+                levels_tensor = torch.full(
+                    (y.shape[0],), fixed_level,
+                    dtype=torch.float, device=self.device)
+                y = y.to(self.device)
+                gt = gt.to(self.device)
+
+                pred = self.model(y, levels_tensor)
+                loss = self.loss_fn(pred, gt)
+                total_loss += loss.item() * y.shape[0]
+
+                pred_argmax = torch.argmax(
+                    F.softmax(pred, dim=1), dim=1).cpu().numpy()
+                gt_argmax = torch.argmax(gt, dim=1).cpu().numpy()
+                for i in range(pred_argmax.shape[0]):
+                    total_score += FastScoringFunction(
+                        gt_argmax[i], pred_argmax[i])
+                num_samples += y.shape[0]
+
+        avg_loss = total_loss / max(num_samples, 1)
+        avg_score = total_score / max(num_samples, 1)
+
+        print(f'Test: loss={avg_loss:.5f}, score={avg_score:.4f} '
+              f'({num_samples} samples)')
+
+        import json
+        results = {'test_loss': avg_loss, 'test_score': avg_score}
+        test_path = os.path.join(self.result_dir, 'test_results.json')
+        with open(test_path, 'w') as f:
+            json.dump(results, f, indent=2)
+        print(f'Test results saved to: {test_path}')
+
+        return results
 
     # ------------------------------------------------------------------
     # Override main train loop for two-stage training
@@ -236,10 +383,12 @@ class FCUNetTrainer(BaseTrainer):
     def train(self):
         """Two-stage training: init stage + main stage."""
         resume_path = self.config.training.get('resume_from', None)
+        base_dir = getattr(self.config, 'result_base_dir', 'results')
         if resume_path:
             self.result_dir = self._find_checkpoint_dir(resume_path)
         else:
-            self.result_dir = self._create_result_dir(self.experiment_name)
+            self.result_dir = self._create_result_dir(
+                self.experiment_name, base_dir=base_dir)
 
         self.build_model()
         self.build_datasets()

@@ -54,4 +54,11 @@ def get_configs():
     validation.data_dir = 'KTC2023/Codes_Python/TrainingData'
     validation.num_val_images = 4
 
+    # Data scaling experiment options
+    data.train_indices = None    # None=all, list=subset indices
+    data.val_indices = None      # None=skip sim val, list=indices
+    data.test_indices = None     # None=skip sim test, list=indices
+
+    training.fixed_level = None  # None=random 1-7, int=fixed level
+
     return config

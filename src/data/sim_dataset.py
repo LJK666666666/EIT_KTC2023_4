@@ -27,14 +27,38 @@ class FCUNetTrainingData(Dataset):
         Uref: Reference voltage measurements (ndarray).
         InvLn: Noise precision matrix for measurement noise augmentation.
         base_path: Path to dataset directory containing gt/ and measurements/.
+        indices: If not None, only include files whose numeric index (from
+            filename like gt_ztm_000042.npy -> 42) is in this list.
+        augment_noise: If True (default), add random noise to reference
+            measurements as data augmentation. Set False for deterministic
+            evaluation (val/test).
     """
 
-    def __init__(self, Uref, InvLn, base_path='dataset'):
+    @staticmethod
+    def _extract_index(filename):
+        """Extract numeric index from filename: gt_ztm_000042.npy -> 42."""
+        stem = filename.rsplit('.', 1)[0]   # gt_ztm_000042
+        return int(stem.split('_')[-1])     # 42
+
+    def __init__(self, Uref, InvLn, base_path='dataset',
+                 indices=None, augment_noise=True):
         self.base_path = base_path
-        self.file_list = [
+        self.augment_noise = augment_noise
+
+        # List and sort by numeric index for deterministic ordering
+        all_files = [
             f for f in os.listdir(os.path.join(self.base_path, 'gt'))
             if f.endswith('.npy')
         ]
+        all_files.sort(key=self._extract_index)
+
+        # Filter by indices if specified
+        if indices is not None:
+            index_set = set(indices)
+            all_files = [f for f in all_files
+                         if self._extract_index(f) in index_set]
+
+        self.file_list = all_files
         self.length = len(self.file_list)
         self.Uref = Uref
         self.InvLn = InvLn
@@ -51,12 +75,15 @@ class FCUNetTrainingData(Dataset):
         measurements = np.load(
             os.path.join(self.base_path, 'measurements', u_name))
 
-        # Add noise to reference (data augmentation)
-        # Flatten sparse matmul result to 1D to avoid broadcasting (2356,)+(2356,1)→(2356,2356)
-        noise = np.asarray(
-            self.InvLn * np.random.randn(self.Uref.shape[0], 1)).flatten()
-        Uref_nois = self.Uref + noise
-        measurements = np.asarray(measurements).flatten() - Uref_nois
+        measurements = np.asarray(measurements).flatten()
+        if self.augment_noise:
+            # Add noise to reference (data augmentation)
+            # Flatten sparse matmul result to 1D to avoid broadcasting
+            noise = np.asarray(
+                self.InvLn * np.random.randn(self.Uref.shape[0], 1)).flatten()
+            measurements = measurements - (self.Uref + noise)
+        else:
+            measurements = measurements - self.Uref
 
         # One-hot encode GT
         gt = np.zeros((3, 256, 256), dtype=np.float32)

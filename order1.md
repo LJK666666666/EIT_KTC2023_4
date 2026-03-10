@@ -28,3 +28,10 @@ python scripts/evaluate_all.py --methods condd --weights-dir results/condd_basel
 
 python scripts/generate_data.py --level 1 --num-images 1000 --save-measurements --output-dir ../drive/MyDrive/dataset
 
+python scripts/generate_data.py --level 1 --num-images 1000 --save-measurements --output-dir ../drive/MyDrive/dataset --start-idx 1000
+
+
+python scripts/data_scaling_experiment.py --train-sizes 100 200 400 800 --batch-size 256
+
+python scripts/data_scaling_experiment.py --batch-size 256 --result-dir /content/drive/MyDrive/results
+

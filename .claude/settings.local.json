@@ -6,7 +6,8 @@
       "Bash(python scripts/evaluate_all.py:*)",
       "Bash(python scripts/generate_plots.py:*)",
       "Bash(python:*)",
-      "Bash(test:*)"
+      "Bash(test:*)",
+      "Bash(grep -n \"level_to_num\" \"/d/010_CodePrograms/E/EIT_KTC2023_4/KTC2023_SubmissionFiles/ktc_training\"/*.py)"
     ]
   }
 }
