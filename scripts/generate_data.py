@@ -19,9 +19,14 @@ Usage:
 
     # Full: gt + measurements + gm_reco
     python scripts/generate_data.py --level 1 --num-images 2000 --save-measurements
+
+    # GPU-accelerated generation (requires CuPy)
+    python scripts/generate_data.py --level 1 --num-images 2000 --gpu
+    python scripts/generate_data.py --level 1 --num-images 2000 --measurements-only --gpu
 """
 
 import argparse
+import json
 import os
 import sys
 import time
@@ -45,7 +50,8 @@ def generate_data(level, num_images, output_dir='dataset',
                   mesh_name='Mesh_dense.mat',
                   save_measurements=False,
                   measurements_only=False,
-                  start_idx=0):
+                  start_idx=0,
+                  use_gpu=False):
     """Generate training data for a single level.
 
     Args:
@@ -58,6 +64,8 @@ def generate_data(level, num_images, output_dir='dataset',
         measurements_only: If True, only save gt + measurements, skip
             linearised reconstruction (much faster, for FCUNet only).
         start_idx: Starting index for file naming.
+        use_gpu: If True, use CuPy GPU acceleration for FEM solve and
+            linearised reconstruction.
     """
     base_path = os.path.join(output_dir, f'level_{level}')
     gt_path = Path(os.path.join(base_path, 'gt'))
@@ -85,7 +93,7 @@ def generate_data(level, num_images, output_dir='dataset',
     z = 1e-6 * np.ones((Nel, 1))
     vincl = np.ones((Nel - 1, 76), dtype=bool)
 
-    solver = EITFEM(mesh2, Injref, Mpat, vincl)
+    solver = EITFEM(mesh2, Injref, Mpat, vincl, use_gpu=use_gpu)
 
     noise_std1 = 0.05
     noise_std2 = 0.01
@@ -110,22 +118,30 @@ def generate_data(level, num_images, output_dir='dataset',
 
         reconstructor = LinearisedRecoFenics(
             Uelref, B, vincl_level, mesh_name='sparse',
-            base_path='KTC2023_SubmissionFiles/data')
+            base_path='KTC2023_SubmissionFiles/data',
+            use_gpu=use_gpu)
 
     mode = 'measurements-only' if measurements_only else 'full'
-    print(f'Generating {num_images} samples for level {level} ({mode})...')
-    times = []
+    gpu_str = '+GPU' if use_gpu else 'CPU'
+    print(f'Generating {num_images} samples for level {level} '
+          f'({mode}, {gpu_str})...')
+
+    # Per-step timing records
+    timing = {
+        'phantom': [], 'forward': [], 'noise': [],
+        'reco': [], 'interp': [], 'io': [], 'total': [],
+    }
 
     for i in tqdm(range(num_images), desc=f'Level {level}'):
-        t0 = time.time()
+        t_total = time.time()
 
         # Generate random phantom
+        t0 = time.time()
         sigma_pix = create_phantoms()
+        timing['phantom'].append(time.time() - t0)
 
         idx = start_idx + i
         gt_name = f'gt_ztm_{idx:06d}.npy'
-
-        np.save(os.path.join(gt_path, gt_name), sigma_pix)
 
         # Random conductivity values
         background = 0.745
@@ -140,32 +156,79 @@ def generate_data(level, num_images, output_dir='dataset',
         sigma_gt = image_to_mesh(np.flipud(sigma).T, mesh)
 
         # Forward simulation with noise (reshape to column vector)
+        t0 = time.time()
         Uel_sim = np.asarray(solver.SolveForward(sigma_gt, z)).reshape(-1, 1)
+        timing['forward'].append(time.time() - t0)
+
+        t0 = time.time()
         noise = np.asarray(
             solver.InvLn * np.random.randn(Uel_sim.shape[0], 1)).reshape(-1, 1)
         Uel_noisy = Uel_sim + noise
+        timing['noise'].append(time.time() - t0)
 
+        # Save gt and measurements
+        t0 = time.time()
+        np.save(os.path.join(gt_path, gt_name), sigma_pix)
         if do_meas:
             u_name = f'u_ztm_{idx:06d}.npy'
             np.save(os.path.join(meas_path, u_name), Uel_noisy.flatten())
 
         # 5 linearised reconstructions (skip if measurements_only)
+        t_reco, t_interp = 0, 0
         if do_reco:
+            t1 = time.time()
             delta_sigma_list = reconstructor.reconstruct_list(
                 Uel_noisy, alphas)
+            t_reco = time.time() - t1
+
+            t1 = time.time()
             sigma_images = [
                 reconstructor.interpolate_to_image(ds)
                 for ds in delta_sigma_list
             ]
             sigma_reco = np.stack(sigma_images)  # (5, 256, 256)
+            t_interp = time.time() - t1
+
             reco_name = f'recos_ztm_{idx:06d}.npy'
             np.save(os.path.join(reco_path, reco_name), sigma_reco)
 
-        times.append(time.time() - t0)
+        timing['reco'].append(t_reco)
+        timing['interp'].append(t_interp)
+        timing['io'].append(time.time() - t0 - t_reco - t_interp)
+        timing['total'].append(time.time() - t_total)
 
-    avg_time = np.mean(times)
+    # Print timing summary
+    avg_total = np.mean(timing['total'])
     print(f'Level {level}: {num_images} samples generated '
-          f'({avg_time:.1f}s/sample avg)')
+          f'({avg_total:.3f}s/sample avg)')
+
+    if num_images > 0:
+        print(f'  Avg timing breakdown (ms):')
+        for key in ['phantom', 'forward', 'noise', 'reco', 'interp', 'io']:
+            avg_ms = np.mean(timing[key]) * 1000
+            if avg_ms > 0.01:
+                print(f'    {key:>10}: {avg_ms:8.1f} ms')
+
+    # Save timing to file
+    timing_summary = {
+        'level': level,
+        'num_images': num_images,
+        'mode': mode,
+        'gpu': use_gpu,
+        'avg_per_sample_s': float(avg_total) if num_images > 0 else 0,
+        'per_step_avg_ms': {
+            k: float(np.mean(v) * 1000) for k, v in timing.items()
+        },
+    }
+    os.makedirs(output_dir, exist_ok=True)
+    timing_path = os.path.join(
+        output_dir,
+        f'timing_level{level}_{mode}_{"gpu" if use_gpu else "cpu"}.json')
+    with open(timing_path, 'w') as f:
+        json.dump(timing_summary, f, indent=2)
+    print(f'  Timing saved to: {timing_path}')
+
+    return timing_summary
 
 
 def parse_args():
@@ -192,11 +255,25 @@ def parse_args():
                              'reconstruction (fast mode for FCUNet)')
     parser.add_argument('--start-idx', type=int, default=0,
                         help='Starting index for file naming')
+    parser.add_argument('--gpu', action='store_true',
+                        help='Use CuPy GPU acceleration (requires CuPy)')
     return parser.parse_args()
 
 
 def main():
     args = parse_args()
+
+    if args.gpu:
+        try:
+            import cupy as cp
+            gpu_name = cp.cuda.runtime.getDeviceProperties(0)['name']
+            if isinstance(gpu_name, bytes):
+                gpu_name = gpu_name.decode()
+            print(f'GPU acceleration enabled: {gpu_name}')
+        except ImportError:
+            print('ERROR: --gpu requires CuPy. Install with: '
+                  'pip install cupy-cuda12x')
+            sys.exit(1)
 
     levels = range(1, 8) if args.all_levels else [args.level]
 
@@ -210,6 +287,7 @@ def main():
             save_measurements=args.save_measurements,
             measurements_only=args.measurements_only,
             start_idx=args.start_idx,
+            use_gpu=args.gpu,
         )
 
     print('Data generation complete.')

@@ -124,3 +124,47 @@ python scripts/train.py --method fcunet --max-iters 1
   3. 文件命名起始偏移：原版 max_image_idx=2000，我们默认 start_idx=0。不影响训练（数据集按目录遍历文件名）。
 
   总结：核心数据生成逻辑完全一致。 差异都是外围功能（手绘图像数据源不可获取、调试用pickle文件、文件名偏移），不影响训练数据的正确性。
+
+
+
+  修改了 3 个文件 + 新建 1 个文件：                                                                                                                
+                                                                                                                                                     ┌───────────────────────────────────────┬─────────────────────────────────────────────────────────────────────────────────────────────────────┐    │                 文件                  │                                                改动                                                 │  
+  ├───────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────────────────────┤  
+  │ src/ktc_methods/KTCFwd.py             │ EITFEM 加 use_gpu 参数，SolveForward 中 spsolve → CuPy 密集求解                                     │
+  ├───────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ src/reconstruction/linearised_reco.py │ 加 use_gpu; reconstruct_list 对角优化（CPU 也受益）+ CuPy GPU 路径; interpolate_to_image 缓存       │  
+  │                                       │ Delaunay 三角化                                                                                     │  
+  ├───────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────────────────────┤  
+  │ scripts/generate_data.py              │ 加 --gpu 参数; 逐步计时 (phantom/forward/noise/reco/interp/io); 保存 timing JSON                    │  
+  ├───────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────────────────────────────────┤  
+  │ scripts/benchmark_data_gen.py         │ 新建: CPU vs GPU 基准对比，输出对比表 + JSON                                                        │  
+  └───────────────────────────────────────┴─────────────────────────────────────────────────────────────────────────────────────────────────────┘  
+
+  三个层面的优化：
+
+  1. SolveForward: scipy.sparse.linalg.spsolve → cupy.linalg.solve（密集，避免 CuPy spsolve 不支持矩阵 RHS 的问题）
+  2. reconstruct_list: 消除了完整 M×M 对角矩阵创建（np.diag → 向量行缩放），CPU 和 GPU 都受益；GPU 路径全程 CuPy
+  3. interpolate_to_image: Delaunay 三角化只算一次，缓存复用
+
+  Colab 上的用法：
+
+# 基准对比（保存到 results/gpu_benchmark.json）
+python scripts/benchmark_data_gen.py --num-samples 10
+python scripts/benchmark_data_gen.py --num-samples 10 --measurements-only
+
+# GPU 加速生成数据
+python scripts/generate_data.py --level 1 --num-images 1000 --measurements-only --gpu
+python scripts/generate_data.py --level 1 --num-images 1000 --gpu
+
+
+  已完成的 6 项优化：
+  1. A0 刚度矩阵向量化组装 + COO（~10-15x）                                                                                                          2. S0 电极边界 COO 替代 CSR（消除 SparseEfficiencyWarning）
+  3. reconstruct_list 对角矩阵优化（~2-3x）                                                                                                        
+  4. reconstruct_list CuPy GPU 加速（6.8x）
+  5. Delaunay 三角化缓存（~1.5-2x）
+  6. SolveForward 回退 CPU 稀疏求解（修正性能倒挂）
+
+  未来优化思路（按收益排序）：
+  - 高收益：Numba JIT、S0 缓存、CPU 多进程流水线、HDF5 存储
+  - 中等收益：稀疏 Cholesky、CuPy 稀疏求解、积分常量预计算
+  - 大规模专用：S0 全向量化、混合精度 float32、CUDA 自定义核函数

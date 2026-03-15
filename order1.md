@@ -35,3 +35,5 @@ python scripts/data_scaling_experiment.py --train-sizes 100 200 400 800 --batch-
 
 python scripts/data_scaling_experiment.py --batch-size 256 --result-dir /content/drive/MyDrive/results
 
+pip install cupy-cuda12x
+python scripts/benchmark_data_gen.py --num-samples 5

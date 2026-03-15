@@ -1,0 +1,32 @@
+{
+  "num_samples": 5,
+  "level": 1,
+  "mode": "full",
+  "gpu_name": "NVIDIA GeForce RTX 5070 Ti Laptop GPU",
+  "seed": 42,
+  "overall_speedup": 4.9455614668092664,
+  "cpu": {
+    "total_s": 113.15997290611267,
+    "per_sample_ms": 22159.622621536255,
+    "per_step_avg_ms": {
+      "phantom": 2.9785633087158203,
+      "forward": 312.5668525695801,
+      "noise": 0.0,
+      "reco": 21783.18748474121,
+      "interp": 60.48102378845215,
+      "total": 22159.622621536255
+    }
+  },
+  "gpu": {
+    "total_s": 27.01451349258423,
+    "per_sample_ms": 4480.709171295166,
+    "per_step_avg_ms": {
+      "phantom": 2.5025367736816406,
+      "forward": 324.82924461364746,
+      "noise": 0.0,
+      "reco": 4077.3646354675293,
+      "interp": 75.09074211120605,
+      "total": 4480.709171295166
+    }
+  }
+}

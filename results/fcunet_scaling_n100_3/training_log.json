@@ -1,0 +1,77 @@
+[
+  {
+    "epoch": 1,
+    "avg_loss": 0.0893358850479126,
+    "stage": "init"
+  },
+  {
+    "epoch": 2,
+    "avg_loss": 0.08701271504163742,
+    "stage": "init"
+  },
+  {
+    "epoch": 3,
+    "avg_loss": 0.08501771748065949,
+    "stage": "init"
+  },
+  {
+    "epoch": 4,
+    "avg_loss": 0.08306554138660431,
+    "stage": "init"
+  },
+  {
+    "epoch": 5,
+    "avg_loss": 0.0813150155544281,
+    "stage": "init"
+  },
+  {
+    "epoch": 6,
+    "avg_loss": 0.07964127689599991,
+    "stage": "init"
+  },
+  {
+    "epoch": 7,
+    "avg_loss": 0.07807631522417069,
+    "stage": "init"
+  },
+  {
+    "epoch": 8,
+    "avg_loss": 0.07662559181451797,
+    "stage": "init"
+  },
+  {
+    "epoch": 9,
+    "avg_loss": 0.07522670686244964,
+    "stage": "init"
+  },
+  {
+    "epoch": 10,
+    "avg_loss": 0.07390364676713944,
+    "stage": "init"
+  },
+  {
+    "epoch": 11,
+    "avg_loss": 0.07270989686250687,
+    "stage": "init"
+  },
+  {
+    "epoch": 12,
+    "avg_loss": 0.07151856139302254,
+    "stage": "init"
+  },
+  {
+    "epoch": 13,
+    "avg_loss": 0.0703584685921669,
+    "stage": "init"
+  },
+  {
+    "epoch": 14,
+    "avg_loss": 0.06930636882781982,
+    "stage": "init"
+  },
+  {
+    "epoch": 15,
+    "avg_loss": 0.06833528518676758,
+    "stage": "init"
+  }
+]

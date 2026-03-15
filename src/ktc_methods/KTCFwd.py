@@ -20,7 +20,8 @@ class CMATRIX:# Compact presentation of a very sparse matrix
 
 
 class EITFEM:
-    def __init__(self, Mesh2, Inj, Mpat=None, vincl=None, sigmamin=None, sigmamax=None):
+    def __init__(self, Mesh2, Inj, Mpat=None, vincl=None, sigmamin=None, sigmamax=None,
+                 use_gpu=False):
         self.Mesh2 = Mesh2
         self.Inj = Inj
         self.Mpat = Mpat
@@ -35,6 +36,10 @@ class EITFEM:
         self.mincl = np.array(vincl)
         self.mincl.shape = (self.Nel-1,self.Inj.shape[1])
 
+        self.use_gpu = use_gpu
+        if use_gpu:
+            import cupy as cp
+            self._cp = cp
 
         self.dA = None
         self.C = np.matrix(np.vstack((np.ones((1, self.Nel-1)), -np.eye(self.Nel-1))))
@@ -50,71 +55,118 @@ class EITFEM:
         sigma[sigma > self.sigmamax] = self.sigmamax
         z[z < self.zmin] = self.zmin
 
-        # Compute the conductivity-dependent part of the FEM matrix
+        # === A0: Vectorized stiffness matrix assembly (COO) ===
         gN = max(np.shape(self.Mesh2.Node))
         HN = max(np.shape(self.Mesh2.H))  # number of elements
-        k = 1
-        Arow = np.zeros((6 * HN, 6), dtype=np.uint32)
-        Acol = np.zeros((6 * HN, 6), dtype=np.uint32)
-        Aval = np.zeros((6 * HN, 6))
-        for ii in range(HN):  # Go through all triangles
-            ind = self.Mesh2.H[ii, :]
-            gg = self.Mesh2.g[ind, :]
-            ss = sigma[ind[[0, 2, 4]]]
-            int = self.grinprod_gauss_quad_node(gg, ss)
+        N = self.ng2 + self.Nel - 1
+        H = self.Mesh2.H   # (HN, 6) element connectivity
+        g = self.Mesh2.g   # (ng2, 2) node coordinates
 
-            Inds1 = np.tile(ind, (6, 1))
-            Acol[k-1:k+5, :] = Inds1
-            ind = ind.T
+        # Gather all element data at once
+        all_gg = g[H]  # (HN, 6, 2)
+        all_ss = sigma[H[:, [0, 2, 4]]]  # vertex sigma values
+        if all_ss.ndim == 3:
+            all_ss = all_ss[:, :, 0]  # (HN, 3)
 
+        # Gauss quadrature: 3 integration points
+        w_q = np.array([1/6, 1/6, 1/6])
+        ip_q = np.array([[1/2, 0], [1/2, 1/2], [0, 1/2]])
 
-            Inds2 = Inds1.T
-            Arow[k-1:k+5, :] = Inds2
-            Aval[k-1:k+5, :] = int
-            k = k + 6
-        A0 = sp.sparse.csr_matrix((Aval.flatten(), (Arow.flatten(), Acol.flatten())), shape=(self.ng2+self.Nel-1, self.ng2+self.Nel-1))
+        all_Ke = np.zeros((HN, 6, 6))
+        for qq in range(3):
+            xi, eta = ip_q[qq]
+            S_q = np.array([1 - xi - eta, xi, eta])
+            L_q = np.array([
+                [4*(xi+eta)-3, -8*xi-4*eta+4, 4*xi-1, 4*eta, 0, -4*eta],
+                [4*(xi+eta)-3, -4*xi, 0, 4*xi, 4*eta-1, -8*eta-4*xi+4]
+            ])  # (2, 6)
 
-        # Compute the rest of the FEM matrix
-        M = sp.sparse.csr_matrix((gN, self.Nel))
-        K = sp.sparse.csr_matrix((gN, gN))
+            # Batched Jacobian: (HN, 2, 2)
+            Jt = np.einsum('ik,ekj->eij', L_q, all_gg)
+
+            # Batched 2x2 inverse and determinant
+            a11, a12 = Jt[:, 0, 0], Jt[:, 0, 1]
+            a21, a22 = Jt[:, 1, 0], Jt[:, 1, 1]
+            det_Jt = a11 * a22 - a12 * a21
+            inv_det = 1.0 / det_Jt
+            iJt = np.empty_like(Jt)
+            iJt[:, 0, 0] = a22 * inv_det
+            iJt[:, 0, 1] = -a12 * inv_det
+            iJt[:, 1, 0] = -a21 * inv_det
+            iJt[:, 1, 1] = a11 * inv_det
+            abs_det = np.abs(det_Jt)  # (HN,)
+
+            # Batched gradient and outer product
+            G = np.einsum('eij,jk->eik', iJt, L_q)  # (HN, 2, 6)
+            sigma_w = all_ss @ S_q  # (HN,)
+            GtG = np.einsum('eik,eij->ekj', G, G)  # (HN, 6, 6)
+            all_Ke += (w_q[qq] * sigma_w * abs_det)[:, None, None] * GtG
+
+        # Build A0 via COO (duplicate indices summed on tocsr)
+        row_A0 = np.repeat(H, 6, axis=1).ravel()
+        col_A0 = np.tile(H, (1, 6)).ravel()
+        A0 = sp.sparse.coo_matrix(
+            (all_Ke.ravel(), (row_A0, col_A0)), shape=(N, N)
+        ).tocsr()
+
+        # === S0: Electrode boundary conditions (COO collection) ===
+        M_data, M_row, M_col = [], [], []
+        K_data, K_row, K_col = [], [], []
         s = np.zeros((self.Nel, 1))
-        g = self.Mesh2.g  # Nodes
         for ii in range(HN):
-            # Go through all triangles
-            ind = self.Mesh2.Element[ii].Topology  # The indices to g of the ii'th triangle.
-            if self.Mesh2.Element[ii].Electrode:  # Checks if the triangle ii is under an electrode
+            ind = self.Mesh2.Element[ii].Topology
+            if self.Mesh2.Element[ii].Electrode:
                 Ind = self.Mesh2.Element[ii].Electrode[1]
-                a = g[Ind[0], :]
-                b = g[Ind[1], :]  # the 2nd order node
-                c = g[Ind[2], :]
-                InE = self.Mesh2.Element[ii].Electrode[0]  # Electrode index.
-                s[InE] = s[InE] + 1 / z[InE] * self.electrlen(np.array([a, c]))  # Assumes straight electrodes.
-                bb1 = self.bound_quad1(np.array([a, b, c]))
-                bb2 = self.bound_quad2(np.array([a, b, c]))
+                a_nd = g[Ind[0], :]
+                b_nd = g[Ind[1], :]
+                c_nd = g[Ind[2], :]
+                InE = self.Mesh2.Element[ii].Electrode[0]
+                z_inv = 1.0 / float(z[InE])
+                s[InE] += z_inv * self.electrlen(np.array([a_nd, c_nd]))
+                bb1 = self.bound_quad1(np.array([a_nd, b_nd, c_nd]))
+                bb2 = self.bound_quad2(np.array([a_nd, b_nd, c_nd]))
                 for il in range(6):
-                    eind = np.where(self.Mesh2.Element[ii].Topology[il] == self.Mesh2.Element[ii].Electrode[1])[0]
+                    eind = np.where(ind[il] == Ind)[0]
                     if eind.size != 0:
-                        M[ind[il], InE] = M[ind[il], InE] - 1 / z[InE] * bb1[eind[0]]
+                        M_row.append(ind[il])
+                        M_col.append(InE)
+                        M_data.append(-z_inv * bb1[eind[0]])
                     for im in range(6):
-                        eind1 = np.where(self.Mesh2.Element[ii].Topology[il] == self.Mesh2.Element[ii].Electrode[1])[0]
-                        eind2 = np.where(self.Mesh2.Element[ii].Topology[im] == self.Mesh2.Element[ii].Electrode[1])[0]
+                        eind1 = np.where(ind[il] == Ind)[0]
+                        eind2 = np.where(ind[im] == Ind)[0]
                         if eind1.size != 0 and eind2.size != 0:
-                            K[ind[il], ind[im]] = K[ind[il], ind[im]] + 1 / z[InE] * bb2[eind1[0], eind2[0]]
+                            K_row.append(ind[il])
+                            K_col.append(ind[im])
+                            K_data.append(z_inv * bb2[eind1[0], eind2[0]])
 
-        tS = sp.sparse.csr_matrix(np.diag(s.flatten()))
+        if M_data:
+            M = sp.sparse.coo_matrix(
+                (M_data, (M_row, M_col)), shape=(gN, self.Nel)
+            ).tocsr()
+        else:
+            M = sp.sparse.csr_matrix((gN, self.Nel))
+        if K_data:
+            K = sp.sparse.coo_matrix(
+                (K_data, (K_row, K_col)), shape=(gN, gN)
+            ).tocsr()
+        else:
+            K = sp.sparse.csr_matrix((gN, gN))
+
+        tS = sp.sparse.diags(s.flatten())
         S = sp.sparse.csr_matrix(self.C.T * tS * self.C)
         M = M * self.C
-        #S0 = sp.sparse.csr_matrix(np.block([[K.toarray(), M.toarray()], [M.toarray().T, S.toarray()]]))
-        S0 = sp.sparse.bmat(
-            [
-            [K, M],
-            [M.T, S]
-            ])
+        S0 = sp.sparse.bmat([[K, M], [M.T, S]])
 
 
         self.A = A0 + S0
         self.b = np.concatenate((np.zeros((self.ng2, self.Inj.shape[1])), self.C.T * self.Inj), axis=0)  # RHS vector
-        UU = sp.sparse.linalg.spsolve(self.A, self.b)  # Solve the FEM system of equations
+
+        # Solve the FEM system of equations
+        # Always use CPU sparse solve: the matrix A is very sparse, so
+        # spsolve is faster than dense GPU solve. The FEM assembly loop
+        # above is the real bottleneck (pure Python) and can't be GPU-
+        # accelerated without a full rewrite.
+        UU = sp.sparse.linalg.spsolve(self.A, self.b)
         self.theta = UU  # FEM solution vectors for each current injection
         self.Pot = UU[0:self.ng2, :]  # The electric potential field for each current injection
         self.Imeas = self.Inj  # Injected currents
