@@ -32,10 +32,34 @@ def set_seed(seed):
     np.random.seed(seed)
 
 
+def detect_optimizations(reconstructor):
+    """Detect active optimization items by inspecting runtime objects."""
+    # A-G are always active (baked into source code)
+    opts = ['A', 'B', 'C', 'D', 'E', 'F', 'G']
+    if (reconstructor is not None
+            and getattr(reconstructor, '_R_precomputed', None) is not None):
+        opts.append('H')
+    return sorted(opts)
+
+
+def get_next_output_path(base_path):
+    """Auto-increment: results/gpu_benchmark_1.json, _2.json, ..."""
+    directory = os.path.dirname(base_path) or '.'
+    stem = os.path.splitext(os.path.basename(base_path))[0]
+    ext = os.path.splitext(base_path)[1] or '.json'
+    num = 1
+    while os.path.exists(os.path.join(directory, f'{stem}_{num}{ext}')):
+        num += 1
+    return os.path.join(directory, f'{stem}_{num}{ext}')
+
+
 def run_benchmark(num_samples, level, ref_path, mesh_name,
                   measurements_only, use_gpu, seed):
-    """Run data generation benchmark, return per-step timing dict."""
-    set_seed(seed)
+    """Run data generation benchmark, return (timing_dict, reconstructor)."""
+    # Use a FIXED seed for Uelref computation so all workers produce the
+    # same Uelref → same R-matrix cache key → mmap cache hit (zero-copy).
+    # The worker-specific seed is applied AFTER Uelref for sample generation.
+    set_seed(42)
 
     y_ref = loadmat(ref_path)
     Injref = y_ref['Injref']
@@ -55,6 +79,9 @@ def run_benchmark(num_samples, level, ref_path, mesh_name,
         solver.InvLn * np.random.randn(Uelref.shape[0], 1)).reshape(-1, 1)
     Uelref = Uelref + noise
 
+    # Now switch to worker-specific seed for sample generation
+    set_seed(seed)
+
     reconstructor = None
     alphas = None
     if not measurements_only:
@@ -65,18 +92,24 @@ def run_benchmark(num_samples, level, ref_path, mesh_name,
         reconstructor = LinearisedRecoFenics(
             Uelref, B, vincl_level, mesh_name='sparse',
             base_path='KTC2023_SubmissionFiles/data',
-            use_gpu=use_gpu)
+            use_gpu=use_gpu, alphas=alphas)
 
     timing = {
         'phantom': [], 'forward': [], 'noise': [],
         'reco': [], 'interp': [], 'total': [],
     }
 
-    # Warm-up: 1 sample (GPU needs warm-up for kernel compilation)
+    # Warm-up: 1 full sample (GPU needs warm-up for kernel compilation)
     set_seed(seed)
     _ = create_phantoms()
     sigma_bg_copy = np.ones((mesh.g.shape[0], 1)) * 0.745
-    _ = solver.SolveForward(sigma_bg_copy, z.copy())
+    Uel_warmup = np.asarray(
+        solver.SolveForward(sigma_bg_copy, z.copy())).reshape(-1, 1)
+    if reconstructor is not None:
+        noise_warmup = np.asarray(
+            solver.InvLn * np.random.randn(Uel_warmup.shape[0], 1)
+        ).reshape(-1, 1)
+        _ = reconstructor.reconstruct_list(Uel_warmup + noise_warmup, alphas)
 
     set_seed(seed)
     for i in range(num_samples):
@@ -123,7 +156,7 @@ def run_benchmark(num_samples, level, ref_path, mesh_name,
         timing['interp'].append(t_interp)
         timing['total'].append(time.time() - t_total)
 
-    return timing
+    return timing, reconstructor
 
 
 def format_table(cpu_timing, gpu_timing, num_samples):
@@ -157,9 +190,42 @@ def parse_args():
                         default='KTC2023/Codes_Python/TrainingData/ref.mat')
     parser.add_argument('--mesh-name', type=str, default='Mesh_dense.mat')
     parser.add_argument('--seed', type=int, default=42)
-    parser.add_argument('--output', type=str, default='results/gpu_benchmark.json',
-                        help='Output path for benchmark results')
+    parser.add_argument('--output', type=str,
+                        default='results/gpu_benchmark.json',
+                        help='Output base path (auto-increments _N suffix)')
+    parser.add_argument('--workers', type=int, default=1,
+                        help='Number of parallel workers for multiprocess '
+                             'throughput benchmark (default: 1 = skip)')
     return parser.parse_args()
+
+
+def _mp_run_benchmark(kwargs):
+    """Worker function for subprocess-isolated benchmark."""
+    import os
+    # Limit MKL/PARDISO to 1 thread per worker — forward solve is
+    # memory-bandwidth-bound, not CPU-bound (16 threads = only 1.1x vs 1 thread)
+    os.environ['MKL_NUM_THREADS'] = '1'
+    os.environ['OMP_NUM_THREADS'] = '1'
+    try:
+        import mkl
+        mkl.set_num_threads(1)
+    except ImportError:
+        pass
+
+    sys.path.insert(0, os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))))
+    timing, reco = run_benchmark(**kwargs)
+    opts = detect_optimizations(reco)
+    gpu_name = None
+    if kwargs.get('use_gpu'):
+        try:
+            import cupy as cp
+            gpu_name = cp.cuda.runtime.getDeviceProperties(0)['name']
+            if isinstance(gpu_name, bytes):
+                gpu_name = gpu_name.decode()
+        except Exception:
+            pass
+    return timing, opts, gpu_name
 
 
 def main():
@@ -181,41 +247,141 @@ def main():
           f'mode={mode}')
     print()
 
-    # CPU benchmark
+    from concurrent.futures import ProcessPoolExecutor
+
+    bench_kwargs = {
+        'num_samples': args.num_samples,
+        'level': args.level,
+        'ref_path': args.ref_path,
+        'mesh_name': args.mesh_name,
+        'measurements_only': args.measurements_only,
+        'seed': args.seed,
+    }
+
+    # Run CPU benchmark directly in main process
     print('Running CPU benchmark...')
     t0 = time.time()
-    cpu_timing = run_benchmark(
-        args.num_samples, args.level, args.ref_path, args.mesh_name,
-        args.measurements_only, use_gpu=False, seed=args.seed)
+    cpu_timing, cpu_reco = run_benchmark(
+        **bench_kwargs, use_gpu=False)
     cpu_total = time.time() - t0
+    cpu_opts = detect_optimizations(cpu_reco)
     print(f'  CPU total: {cpu_total:.1f}s '
           f'({np.mean(cpu_timing["total"])*1000:.0f} ms/sample avg)')
 
-    # GPU benchmark
+    # Free large arrays before GPU run
+    del cpu_reco
+    import gc; gc.collect()
+
+    # Run GPU benchmark directly (may fail with large precomputed matrices)
+    gpu_timing = None
+    gpu_total = 0
+    gpu_opts = []
     print('Running GPU benchmark...')
-    t0 = time.time()
-    gpu_timing = run_benchmark(
-        args.num_samples, args.level, args.ref_path, args.mesh_name,
-        args.measurements_only, use_gpu=True, seed=args.seed)
-    gpu_total = time.time() - t0
-    print(f'  GPU total: {gpu_total:.1f}s '
-          f'({np.mean(gpu_timing["total"])*1000:.0f} ms/sample avg)')
+    try:
+        t0 = time.time()
+        gpu_timing_raw, gpu_reco = run_benchmark(
+            **bench_kwargs, use_gpu=True)
+        gpu_total = time.time() - t0
+        gpu_opts = detect_optimizations(gpu_reco)
+        gpu_timing = gpu_timing_raw
+        print(f'  GPU total: {gpu_total:.1f}s '
+              f'({np.mean(gpu_timing["total"])*1000:.0f} ms/sample avg)')
+        del gpu_reco; gc.collect()
+    except MemoryError:
+        print('  GPU benchmark skipped (insufficient memory for both '
+              'CPU + GPU precomputed matrices in same process)')
+
+    del gc
 
     # Print comparison table
     print()
-    print(format_table(cpu_timing, gpu_timing, args.num_samples))
+    if gpu_timing is not None:
+        print(format_table(cpu_timing, gpu_timing, args.num_samples))
+        overall_speedup = (np.mean(cpu_timing['total'])
+                           / np.mean(gpu_timing['total']))
+        print(f'\nOverall speedup: {overall_speedup:.1f}x')
+    else:
+        # CPU-only summary
+        overall_speedup = 1.0
+        steps = ['phantom', 'forward', 'noise', 'reco', 'interp', 'total']
+        header = f'{"Step":>10} {"CPU (ms)":>10}'
+        sep = '-' * len(header)
+        print(sep)
+        print(header)
+        print(sep)
+        for step in steps:
+            avg = np.mean(cpu_timing[step]) * 1000
+            if avg > 0.01:
+                print(f'{step:>10} {avg:>10.1f}')
+        print(sep)
 
-    overall_speedup = (np.mean(cpu_timing['total'])
-                       / np.mean(gpu_timing['total']))
-    print(f'\nOverall speedup: {overall_speedup:.1f}x')
+    # Multiprocess throughput benchmark
+    mp_result = None
+    if args.workers > 1:
+        from concurrent.futures import ProcessPoolExecutor
+        n = args.num_samples
+        w = args.workers
+        chunk = n // w
+        worker_args = []
+        for i in range(w):
+            count = chunk if i < w - 1 else n - i * chunk
+            worker_args.append({
+                'num_samples': count,
+                'level': args.level,
+                'ref_path': args.ref_path,
+                'mesh_name': args.mesh_name,
+                'measurements_only': args.measurements_only,
+                'use_gpu': False,
+                'seed': args.seed + i * 10000,
+            })
 
-    # Save results
+        print(f'\nRunning multiprocess benchmark ({w} workers, '
+              f'{n} samples total)...')
+        t0 = time.time()
+        with ProcessPoolExecutor(max_workers=w) as pool:
+            mp_results = list(pool.map(_mp_run_benchmark, worker_args))
+        mp_wall = time.time() - t0
+
+        # Merge per-step timings from all workers
+        mp_timings_list = [r[0] for r in mp_results]
+        mp_merged = {k: [] for k in mp_timings_list[0]}
+        for t in mp_timings_list:
+            for k, v in t.items():
+                mp_merged[k].extend(v)
+
+        mp_throughput = mp_wall / n * 1000
+        serial_ms = np.mean(cpu_timing['total']) * 1000
+        tp_speedup = serial_ms / mp_throughput
+
+        print(f'  Wall time: {mp_wall:.1f}s '
+              f'({mp_throughput:.0f} ms/sample throughput)')
+        print(f'  vs serial CPU: {tp_speedup:.1f}x throughput gain')
+
+        mp_result = {
+            'workers': w,
+            'wall_time_s': float(mp_wall),
+            'throughput_ms_per_sample': float(mp_throughput),
+            'throughput_speedup': float(tp_speedup),
+            'per_step_avg_ms': {
+                k: float(np.mean(v) * 1000)
+                for k, v in mp_merged.items()
+            },
+        }
+
+    # Detect active optimizations
+    optimizations = sorted(set(gpu_opts) | set(cpu_opts))
+    print(f'Active optimizations: {", ".join(optimizations)}')
+
+    # Save results with auto-increment filename
+    output_path = get_next_output_path(args.output)
+
     results = {
         'num_samples': args.num_samples,
         'level': args.level,
         'mode': mode,
         'gpu_name': gpu_name,
         'seed': args.seed,
+        'optimizations': optimizations,
         'overall_speedup': float(overall_speedup),
         'cpu': {
             'total_s': float(cpu_total),
@@ -225,20 +391,25 @@ def main():
                 for k, v in cpu_timing.items()
             },
         },
-        'gpu': {
+    }
+
+    if gpu_timing is not None:
+        results['gpu'] = {
             'total_s': float(gpu_total),
             'per_sample_ms': float(np.mean(gpu_timing['total']) * 1000),
             'per_step_avg_ms': {
                 k: float(np.mean(v) * 1000)
                 for k, v in gpu_timing.items()
             },
-        },
-    }
+        }
 
-    os.makedirs(os.path.dirname(args.output), exist_ok=True)
-    with open(args.output, 'w') as f:
+    if mp_result is not None:
+        results['multiprocess'] = mp_result
+
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    with open(output_path, 'w') as f:
         json.dump(results, f, indent=2)
-    print(f'\nResults saved to: {args.output}')
+    print(f'Results saved to: {output_path}')
 
 
 if __name__ == '__main__':

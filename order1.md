@@ -37,3 +37,6 @@ python scripts/data_scaling_experiment.py --batch-size 256 --result-dir /content
 
 pip install cupy-cuda12x
 python scripts/benchmark_data_gen.py --num-samples 5
+python scripts/benchmark_data_gen.py --num-samples 40 --workers 4
+
+

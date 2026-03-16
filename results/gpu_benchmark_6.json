@@ -1,0 +1,56 @@
+{
+  "num_samples": 40,
+  "level": 1,
+  "mode": "full",
+  "gpu_name": "NVIDIA GeForce RTX 5070 Ti Laptop GPU",
+  "seed": 42,
+  "optimizations": [
+    "A",
+    "B",
+    "C",
+    "D",
+    "E",
+    "F",
+    "G",
+    "H"
+  ],
+  "overall_speedup": 1.1537253041532016,
+  "cpu": {
+    "total_s": 25.016762733459473,
+    "per_sample_ms": 191.71575903892517,
+    "per_step_avg_ms": {
+      "phantom": 2.308112382888794,
+      "forward": 159.06254649162292,
+      "noise": 0.11727213859558105,
+      "reco": 28.1977117061615,
+      "interp": 0.8818268775939941,
+      "total": 191.71575903892517
+    }
+  },
+  "gpu": {
+    "total_s": 10.87527060508728,
+    "per_sample_ms": 166.17106199264526,
+    "per_step_avg_ms": {
+      "phantom": 2.7283132076263428,
+      "forward": 159.1982126235962,
+      "noise": 0.23691654205322266,
+      "reco": 2.422124147415161,
+      "interp": 0.6961345672607422,
+      "total": 166.17106199264526
+    }
+  },
+  "multiprocess": {
+    "workers": 4,
+    "wall_time_s": 51.00580978393555,
+    "throughput_ms_per_sample": 1275.1452445983887,
+    "throughput_speedup": 0.15034817394414288,
+    "per_step_avg_ms": {
+      "phantom": 2.5952816009521484,
+      "forward": 466.97614192962646,
+      "noise": 0.1513361930847168,
+      "reco": 33.354651927948,
+      "interp": 0.9357869625091553,
+      "total": 505.15056848525995
+    }
+  }
+}

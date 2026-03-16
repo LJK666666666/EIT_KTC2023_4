@@ -22,12 +22,18 @@ Usage:
 
     # GPU-accelerated generation (requires CuPy)
     python scripts/generate_data.py --level 1 --num-images 2000 --gpu
-    python scripts/generate_data.py --level 1 --num-images 2000 --measurements-only --gpu
+
+    # HDF5 output (single file instead of per-sample .npy)
+    python scripts/generate_data.py --level 1 --num-images 2000 --hdf5
+
+    # CPU multiprocess (4 workers, parallel forward solves)
+    python scripts/generate_data.py --level 1 --num-images 2000 --workers 4
 """
 
 import argparse
 import json
 import os
+import random
 import sys
 import time
 from pathlib import Path
@@ -51,7 +57,8 @@ def generate_data(level, num_images, output_dir='dataset',
                   save_measurements=False,
                   measurements_only=False,
                   start_idx=0,
-                  use_gpu=False):
+                  use_gpu=False,
+                  use_hdf5=False):
     """Generate training data for a single level.
 
     Args:
@@ -66,21 +73,31 @@ def generate_data(level, num_images, output_dir='dataset',
         start_idx: Starting index for file naming.
         use_gpu: If True, use CuPy GPU acceleration for FEM solve and
             linearised reconstruction.
+        use_hdf5: If True, save to a single HDF5 file instead of per-sample
+            .npy files. Reduces filesystem overhead for large datasets.
     """
     base_path = os.path.join(output_dir, f'level_{level}')
-    gt_path = Path(os.path.join(base_path, 'gt'))
-    gt_path.mkdir(parents=True, exist_ok=True)
+    os.makedirs(base_path, exist_ok=True)
 
     do_reco = not measurements_only
     do_meas = save_measurements or measurements_only
 
-    if do_reco:
-        reco_path = Path(os.path.join(base_path, 'gm_reco'))
-        reco_path.mkdir(parents=True, exist_ok=True)
-
-    if do_meas:
-        meas_path = Path(os.path.join(base_path, 'measurements'))
-        meas_path.mkdir(parents=True, exist_ok=True)
+    # Set up output paths (HDF5 or per-sample .npy)
+    h5_file = None
+    gt_path = reco_path = meas_path = None
+    if use_hdf5:
+        import h5py
+        h5_path = os.path.join(base_path, 'data.h5')
+        h5_file = h5py.File(h5_path, 'w')
+    else:
+        gt_path = Path(os.path.join(base_path, 'gt'))
+        gt_path.mkdir(parents=True, exist_ok=True)
+        if do_reco:
+            reco_path = Path(os.path.join(base_path, 'gm_reco'))
+            reco_path.mkdir(parents=True, exist_ok=True)
+        if do_meas:
+            meas_path = Path(os.path.join(base_path, 'measurements'))
+            meas_path.mkdir(parents=True, exist_ok=True)
 
     # Load reference data
     y_ref = loadmat(ref_path)
@@ -119,12 +136,27 @@ def generate_data(level, num_images, output_dir='dataset',
         reconstructor = LinearisedRecoFenics(
             Uelref, B, vincl_level, mesh_name='sparse',
             base_path='KTC2023_SubmissionFiles/data',
-            use_gpu=use_gpu)
+            use_gpu=use_gpu, alphas=alphas)
 
     mode = 'measurements-only' if measurements_only else 'full'
     gpu_str = '+GPU' if use_gpu else 'CPU'
+    hdf5_str = '+HDF5' if use_hdf5 else ''
     print(f'Generating {num_images} samples for level {level} '
-          f'({mode}, {gpu_str})...')
+          f'({mode}, {gpu_str}{hdf5_str})...')
+
+    # Create HDF5 datasets (need measurement dimension from solver)
+    if h5_file is not None:
+        n_meas = Uelref.shape[0]
+        h5_gt = h5_file.create_dataset(
+            'gt', shape=(num_images, 256, 256), dtype='float32')
+        h5_meas = None
+        if do_meas:
+            h5_meas = h5_file.create_dataset(
+                'measurements', shape=(num_images, n_meas), dtype='float64')
+        h5_reco = None
+        if do_reco:
+            h5_reco = h5_file.create_dataset(
+                'reco', shape=(num_images, 5, 256, 256), dtype='float32')
 
     # Per-step timing records
     timing = {
@@ -168,10 +200,15 @@ def generate_data(level, num_images, output_dir='dataset',
 
         # Save gt and measurements
         t0 = time.time()
-        np.save(os.path.join(gt_path, gt_name), sigma_pix)
-        if do_meas:
-            u_name = f'u_ztm_{idx:06d}.npy'
-            np.save(os.path.join(meas_path, u_name), Uel_noisy.flatten())
+        if h5_file is not None:
+            h5_gt[i] = sigma_pix.astype(np.float32)
+            if do_meas and h5_meas is not None:
+                h5_meas[i] = Uel_noisy.flatten()
+        else:
+            np.save(os.path.join(gt_path, gt_name), sigma_pix)
+            if do_meas:
+                u_name = f'u_ztm_{idx:06d}.npy'
+                np.save(os.path.join(meas_path, u_name), Uel_noisy.flatten())
 
         # 5 linearised reconstructions (skip if measurements_only)
         t_reco, t_interp = 0, 0
@@ -190,12 +227,20 @@ def generate_data(level, num_images, output_dir='dataset',
             t_interp = time.time() - t1
 
             reco_name = f'recos_ztm_{idx:06d}.npy'
-            np.save(os.path.join(reco_path, reco_name), sigma_reco)
+            if h5_file is not None:
+                h5_reco[i] = sigma_reco.astype(np.float32)
+            else:
+                np.save(os.path.join(reco_path, reco_name), sigma_reco)
 
         timing['reco'].append(t_reco)
         timing['interp'].append(t_interp)
         timing['io'].append(time.time() - t0 - t_reco - t_interp)
         timing['total'].append(time.time() - t_total)
+
+    # Close HDF5 file if open
+    if h5_file is not None:
+        h5_file.close()
+        print(f'  HDF5 saved to: {os.path.join(base_path, "data.h5")}')
 
     # Print timing summary
     avg_total = np.mean(timing['total'])
@@ -257,7 +302,27 @@ def parse_args():
                         help='Starting index for file naming')
     parser.add_argument('--gpu', action='store_true',
                         help='Use CuPy GPU acceleration (requires CuPy)')
+    parser.add_argument('--hdf5', action='store_true',
+                        help='Save to single HDF5 file instead of per-sample '
+                             '.npy files (reduces filesystem overhead)')
+    parser.add_argument('--workers', type=int, default=1,
+                        help='Number of parallel workers (CPU multiprocess, '
+                             'default: 1 = serial)')
     return parser.parse_args()
+
+
+def _mp_generate_chunk(kwargs):
+    """Wrapper for multiprocessing: generate a chunk of samples."""
+    import os
+    os.environ['MKL_NUM_THREADS'] = '1'
+    os.environ['OMP_NUM_THREADS'] = '1'
+    try:
+        import mkl
+        mkl.set_num_threads(1)
+    except ImportError:
+        pass
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    return generate_data(**kwargs)
 
 
 def main():
@@ -278,17 +343,49 @@ def main():
     levels = range(1, 8) if args.all_levels else [args.level]
 
     for level in levels:
-        generate_data(
-            level=level,
-            num_images=args.num_images,
-            output_dir=args.output_dir,
-            ref_path=args.ref_path,
-            mesh_name=args.mesh_name,
-            save_measurements=args.save_measurements,
-            measurements_only=args.measurements_only,
-            start_idx=args.start_idx,
-            use_gpu=args.gpu,
-        )
+        if args.workers > 1 and not args.gpu:
+            # Multiprocess: split samples across workers (CPU only)
+            from concurrent.futures import ProcessPoolExecutor
+            n = args.num_images
+            w = args.workers
+            chunk_size = n // w
+            worker_args = []
+            for i in range(w):
+                start = args.start_idx + i * chunk_size
+                count = chunk_size if i < w - 1 else n - i * chunk_size
+                worker_args.append({
+                    'level': level,
+                    'num_images': count,
+                    'output_dir': args.output_dir,
+                    'ref_path': args.ref_path,
+                    'mesh_name': args.mesh_name,
+                    'save_measurements': args.save_measurements,
+                    'measurements_only': args.measurements_only,
+                    'start_idx': start,
+                    'use_gpu': False,
+                    'use_hdf5': False,  # HDF5 not supported with multiprocess
+                })
+            print(f'Using {w} workers for level {level} '
+                  f'({chunk_size} samples/worker)...')
+            t0 = time.time()
+            with ProcessPoolExecutor(max_workers=w) as pool:
+                list(pool.map(_mp_generate_chunk, worker_args))
+            elapsed = time.time() - t0
+            print(f'Level {level}: {n} samples in {elapsed:.1f}s '
+                  f'({elapsed/n*1000:.0f} ms/sample throughput)')
+        else:
+            generate_data(
+                level=level,
+                num_images=args.num_images,
+                output_dir=args.output_dir,
+                ref_path=args.ref_path,
+                mesh_name=args.mesh_name,
+                save_measurements=args.save_measurements,
+                measurements_only=args.measurements_only,
+                start_idx=args.start_idx,
+                use_gpu=args.gpu,
+                use_hdf5=args.hdf5,
+            )
 
     print('Data generation complete.')
 
