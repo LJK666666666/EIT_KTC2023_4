@@ -26,6 +26,7 @@ Usage:
 """
 
 import argparse
+import glob
 import json
 import os
 import random
@@ -81,16 +82,21 @@ def load_summary_config(config_path):
 
 def find_latest_matching_dir(base_dir, experiment_name):
     """Find the latest result dir matching {experiment_name}_{num}."""
-    num = 1
-    latest = None
-    while True:
-        dir_name = os.path.join(base_dir, f'{experiment_name}_{num}')
-        if os.path.exists(dir_name):
-            latest = dir_name
-            num += 1
-        else:
-            break
-    return latest
+    pattern = os.path.join(base_dir, f'{experiment_name}_*')
+    candidates = []
+
+    for path in glob.glob(pattern):
+        if not os.path.isdir(path):
+            continue
+        suffix = os.path.basename(path).removeprefix(f'{experiment_name}_')
+        if suffix.isdigit():
+            candidates.append((int(suffix), path))
+
+    if not candidates:
+        return None
+
+    candidates.sort(key=lambda item: item[0])
+    return candidates[-1][1]
 
 
 def get_override_subdir(summary_config, n_train):
