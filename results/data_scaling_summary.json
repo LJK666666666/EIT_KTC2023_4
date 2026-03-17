@@ -1,0 +1,14 @@
+[
+  {
+    "n_train": 400,
+    "result_dir": "/content/drive/MyDrive/results/fcunet_scaling_n400_1",
+    "test_loss": 0.10346334218978882,
+    "test_score": 0.833007348966339
+  },
+  {
+    "n_train": 800,
+    "result_dir": "/content/drive/MyDrive/results/fcunet_scaling_n800_1",
+    "test_loss": 0.07522539108991623,
+    "test_score": 0.8683881395945323
+  }
+]
