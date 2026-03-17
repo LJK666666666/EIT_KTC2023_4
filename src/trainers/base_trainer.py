@@ -54,6 +54,10 @@ class BaseTrainer(ABC):
         self.training_log = []
         self.writer = None
 
+        # Early stopping state
+        self._es_counter = 0
+        self._es_best_val_loss = None
+
     # ------------------------------------------------------------------
     # Result directory management
     # ------------------------------------------------------------------
@@ -170,27 +174,51 @@ class BaseTrainer(ABC):
 
             all_metrics = {**epoch_metrics, **val_metrics}
 
-            # Scheduler step
+            # ReduceLROnPlateau: step with val_loss (preferred) or avg_loss
             if self.scheduler is not None:
-                self.scheduler.step()
-                all_metrics['lr'] = self.optimizer.param_groups[0]['lr']
-                self.writer.add_scalar('train/lr', all_metrics['lr'],
-                                       epoch + 1)
+                sched_metric = val_metrics.get(
+                    'val_loss', epoch_metrics.get('avg_loss'))
+                if sched_metric is not None:
+                    self.scheduler.step(sched_metric)
+            all_metrics['lr'] = self.optimizer.param_groups[0]['lr']
+            self.writer.add_scalar('train/lr', all_metrics['lr'],
+                                   epoch + 1)
 
             self._log_epoch(epoch, all_metrics)
 
             # Save last checkpoint every epoch
             self._save_checkpoint('last.pt')
 
-            # Save best if score improved
-            if 'score' in val_metrics:
+            # Save best if val_loss improved (lower is better)
+            if 'val_loss' in val_metrics:
                 if (self.best_metric is None
-                        or val_metrics['score'] > self.best_metric):
-                    self.best_metric = val_metrics['score']
+                        or val_metrics['val_loss'] < self.best_metric):
+                    self.best_metric = val_metrics['val_loss']
                     self._save_checkpoint('best.pt')
-                    print(f'  New best score: {val_metrics["score"]:.4f}')
+                    print(f'  New best val_loss: '
+                          f'{val_metrics["val_loss"]:.5f}')
+
+            # Early stopping based on val_loss (lower=better)
+            es_loss = val_metrics.get(
+                'val_loss', epoch_metrics.get('avg_loss'))
+            if es_loss is not None:
+                if (self._es_best_val_loss is None
+                        or es_loss < self._es_best_val_loss):
+                    self._es_best_val_loss = es_loss
+                    self._es_counter = 0
+                else:
+                    self._es_counter += 1
 
             self.on_epoch_end(epoch, all_metrics)
+
+            # Early stopping check
+            es_patience = self.config.training.get(
+                'early_stopping_patience', None)
+            if es_patience and self._es_counter >= es_patience:
+                print(f'Early stopping: val_loss not improved for '
+                      f'{es_patience} epochs '
+                      f'(best={self._es_best_val_loss:.4f})')
+                break
 
             if max_iters and self.global_step >= max_iters:
                 print(f'Quick test: reached {max_iters} iterations, stopping.')
@@ -252,6 +280,8 @@ class BaseTrainer(ABC):
             'scheduler_state_dict': (self.scheduler.state_dict()
                                      if self.scheduler else None),
             'training_log': self.training_log,
+            'es_counter': self._es_counter,
+            'es_best_val_loss': self._es_best_val_loss,
         }
         state.update(self.get_checkpoint_extra())
         path = os.path.join(self.result_dir, filename)
@@ -270,6 +300,8 @@ class BaseTrainer(ABC):
         if self.scheduler and state.get('scheduler_state_dict'):
             self.scheduler.load_state_dict(state['scheduler_state_dict'])
         self.training_log = state.get('training_log', [])
+        self._es_counter = state.get('es_counter', 0)
+        self._es_best_val_loss = state.get('es_best_val_loss', None)
 
         self.load_checkpoint_extra(state)
         print(f'  Resumed at epoch {self.current_epoch}, '

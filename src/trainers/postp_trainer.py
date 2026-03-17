@@ -19,7 +19,6 @@ from .base_trainer import BaseTrainer
 from ..configs import get_postp_config
 from ..models.openai_unet import OpenAiUNetModel
 from ..data import MmapDataset, SimData
-from ..evaluation.scoring import FastScoringFunction
 
 
 class PostPTrainer(BaseTrainer):
@@ -62,10 +61,11 @@ class PostPTrainer(BaseTrainer):
 
         self.optimizer = torch.optim.Adam(
             model.parameters(), lr=self.config.training.lr)
-        self.scheduler = lr_scheduler.StepLR(
+        self.scheduler = lr_scheduler.ReduceLROnPlateau(
             self.optimizer,
-            step_size=self.config.training.scheduler_step_size,
-            gamma=self.config.training.scheduler_gamma)
+            mode='min',
+            patience=self.config.training.scheduler_patience,
+            factor=self.config.training.scheduler_factor)
 
     def build_datasets(self):
         use_mmap = self.config.data.get('use_mmap', False)
@@ -145,12 +145,19 @@ class PostPTrainer(BaseTrainer):
         return {'loss': loss.item()}
 
     def validate(self, epoch):
-        """Validate on challenge test images across all 7 levels."""
+        """Validate on challenge images: CE loss across all 7 levels."""
         if self.val_data is None:
             return {}
 
-        gt_np = self.val_data['gt']
-        full_score = 0
+        gt_np = self.val_data['gt']  # (N, 256, 256) integer
+        # Convert GT to one-hot
+        gt_tensor = torch.from_numpy(gt_np).long()
+        gt_onehot = torch.zeros(gt_tensor.shape[0], 3, 256, 256)
+        for c in range(3):
+            gt_onehot[:, c, :, :] = (gt_tensor == c).float()
+        gt_onehot = gt_onehot.to(self.device)
+
+        total_loss = 0.0
 
         for level in range(1, 8):
             c_val = torch.from_numpy(
@@ -161,22 +168,11 @@ class PostPTrainer(BaseTrainer):
 
             with torch.no_grad():
                 pred = self.model(c_val, level_inp)
-                pred_softmax = F.softmax(pred, dim=1)
-            pred_argmax = torch.argmax(
-                pred_softmax, dim=1).cpu().numpy()
+                loss = self.loss_fn(pred, gt_onehot)
+            total_loss += loss.item()
 
-            mean_score = 0
-            for i in range(pred_argmax.shape[0]):
-                score = FastScoringFunction(gt_np[i], pred_argmax[i])
-                mean_score += score
-            mean_score /= pred_argmax.shape[0]
+        avg_loss = total_loss / 7
+        self.writer.add_scalar('val/loss', avg_loss, epoch + 1)
+        print(f'  Val loss: {avg_loss:.5f}')
 
-            self.writer.add_scalar(
-                f'val/score_level{level}', mean_score, epoch + 1)
-            full_score += mean_score
-
-        avg_score = full_score / 7
-        self.writer.add_scalar('val/avg_score', avg_score, epoch + 1)
-        print(f'  Val score: {avg_score:.4f} (sum={full_score:.4f})')
-
-        return {'score': avg_score}
+        return {'val_loss': avg_loss}

@@ -22,7 +22,6 @@ from ..diffusion.losses import score_based_loss_fn, epsilon_based_loss_fn
 from ..diffusion.ema import ExponentialMovingAverage
 from ..diffusion.sde import _SCORE_PRED_CLASSES, _EPSILON_PRED_CLASSES
 from ..data import MmapDataset, SimData
-from ..evaluation.scoring import FastScoringFunction
 from ..samplers import BaseSampler, wrapper_ddim
 
 
@@ -33,7 +32,7 @@ class CondDTrainer(BaseTrainer):
     (DDPM/VPSDE/VESDE) determines which loss function is used.
 
     EMA is initialised after ema_warm_start_steps and updated every step.
-    Validation uses DDIM sampling + majority vote + FastScoringFunction.
+    Validation uses DDIM sampling + MSE loss.
     """
 
     def __init__(self, config=None, level=1,
@@ -59,7 +58,12 @@ class CondDTrainer(BaseTrainer):
 
         self.optimizer = torch.optim.Adam(
             score.parameters(), lr=float(self.config.training.lr))
-        self.scheduler = None  # No scheduler for diffusion training
+        from torch.optim import lr_scheduler
+        self.scheduler = lr_scheduler.ReduceLROnPlateau(
+            self.optimizer,
+            mode='min',
+            patience=self.config.training.scheduler_patience,
+            factor=self.config.training.scheduler_factor)
 
         # Select loss function based on SDE type
         if any(isinstance(self.sde, cls) for cls in _SCORE_PRED_CLASSES):
@@ -144,12 +148,12 @@ class CondDTrainer(BaseTrainer):
         return {'loss': loss.item()}
 
     def validate(self, epoch):
-        """Validate using DDIM sampling + FastScoringFunction."""
+        """Validate using DDIM sampling + MSE loss (no score computation)."""
         if self.val_data is None:
             return {}
 
         c_test = self.val_data['recos'].to(self.device)
-        x_test = self.val_data['gt']
+        x_test = self.val_data['gt']  # (N, 1, 256, 256) tensor
 
         num_steps = self.config.validation.num_steps
         eps = self.config.validation.get('eps', 1e-3)
@@ -172,20 +176,14 @@ class CondDTrainer(BaseTrainer):
 
         x_mean = sampler.sample(c_test, logging=False)
 
-        x_round = torch.round(x_mean).cpu().numpy()[:, 0, :, :]
-        x_round = np.clip(x_round, 0, 2)
+        # MSE between sampled output and ground truth
+        mse_loss = torch.mean(
+            (x_mean.cpu() - x_test.float()) ** 2).item()
 
-        mean_score = 0
-        for i in range(x_round.shape[0]):
-            score = FastScoringFunction(
-                x_test[i, 0, :, :].numpy(), x_round[i])
-            mean_score += score
-        mean_score /= x_round.shape[0]
+        self.writer.add_scalar('val/mse_loss', mse_loss, epoch + 1)
+        print(f'  Val MSE (level {self.level}): {mse_loss:.5f}')
 
-        self.writer.add_scalar('val/score', mean_score, epoch + 1)
-        print(f'  Val score (level {self.level}): {mean_score:.4f}')
-
-        return {'score': mean_score}
+        return {'val_loss': mse_loss}
 
     # ------------------------------------------------------------------
     # Checkpoint extras (EMA state)

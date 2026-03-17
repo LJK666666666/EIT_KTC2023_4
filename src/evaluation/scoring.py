@@ -253,6 +253,16 @@ def _convolve2d_separable(img, kernel, mode='constant'):
     )
 
 
+# Pre-computed constants for _ssim_fast (r=80, 256x256 images)
+_SSIM_R = 80
+_SSIM_WS = int(np.ceil(2 * _SSIM_R))  # 160
+_wr = np.arange(-_SSIM_WS, _SSIM_WS + 1)
+_SSIM_KERNEL = ((1 / np.sqrt(2 * np.pi))
+                * np.exp(-0.5 * _wr ** 2 / _SSIM_R ** 2))[None]  # (1, 321)
+_SSIM_CORRECTION = _convolve2d_separable(
+    np.ones((256, 256)), _SSIM_KERNEL, mode='constant')
+
+
 def _ssim_fast(truth, reco):
     """Compute SSIM using separable 1D Gaussian convolutions (fast version).
 
@@ -273,14 +283,8 @@ def _ssim_fast(truth, reco):
     """
     c1 = 1e-4
     c2 = 9e-4
-    r = 80
-
-    ws = int(np.ceil(2 * r))
-    wr = np.arange(-ws, ws + 1)
-    ker = ((1 / np.sqrt(2 * np.pi))
-           * np.exp(-0.5 * np.divide(wr ** 2, r ** 2)))[None]
-
-    correction = _convolve2d_separable(np.ones(truth.shape), ker, mode='constant')
+    ker = _SSIM_KERNEL
+    correction = _SSIM_CORRECTION
 
     gt = np.divide(_convolve2d_separable(truth, ker, mode='constant'), correction)
     gr = np.divide(_convolve2d_separable(reco, ker, mode='constant'), correction)

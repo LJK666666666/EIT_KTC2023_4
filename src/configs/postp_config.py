@@ -13,8 +13,6 @@ def get_configs():
     training.batch_size = 6
     training.epochs = 500
     training.lr = 3e-5
-    training.scheduler_step_size = 10
-    training.scheduler_gamma = 0.75
     training.log_freq = 50
     training.num_workers = 8
 

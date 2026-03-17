@@ -15,8 +15,6 @@ def get_configs():
     training.init_epochs = 15        # pre-training epochs for initial_linear
     training.lr = 3e-5               # main training lr
     training.init_lr = 1e-4          # initial_linear pre-training lr
-    training.scheduler_step_size = 30
-    training.scheduler_gamma = 0.95
     training.log_freq = 50
     training.num_workers = 8
 

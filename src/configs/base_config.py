@@ -11,4 +11,12 @@ def get_base_training_config():
     training.val_freq = 1            # validate every N epochs (0 = disabled)
     training.save_freq = 1           # save checkpoint every N epochs
     training.grad_clip_norm = 1.0
+
+    # ReduceLROnPlateau: reduce LR when val score plateaus
+    training.scheduler_patience = 3  # epochs without improvement before LR decay
+    training.scheduler_factor = 0.7  # multiply LR by this factor on plateau
+
+    # Early stopping: stop training when val score stops improving
+    training.early_stopping_patience = 15  # epochs without improvement before stop
+
     return training

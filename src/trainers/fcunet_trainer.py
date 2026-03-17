@@ -68,10 +68,11 @@ class FCUNetTrainer(BaseTrainer):
         # Main optimizer (full model, stage 2)
         self.optimizer = torch.optim.Adam(
             model.parameters(), lr=self.config.training.lr)
-        self.scheduler = lr_scheduler.StepLR(
+        self.scheduler = lr_scheduler.ReduceLROnPlateau(
             self.optimizer,
-            step_size=self.config.training.scheduler_step_size,
-            gamma=self.config.training.scheduler_gamma)
+            mode='min',
+            patience=self.config.training.scheduler_patience,
+            factor=self.config.training.scheduler_factor)
 
         # Init optimizer (initial_linear only, stage 1)
         self.init_optimizer = torch.optim.Adam(
@@ -230,27 +231,20 @@ class FCUNetTrainer(BaseTrainer):
         return {'loss': loss.item()}
 
     def validate(self, epoch):
-        """Validate on simulated val set (if configured) and/or challenge images."""
+        """Validate: compute val_loss only (no score computation)."""
         metrics = {}
 
-        # Simulated val set evaluation (data scaling experiment)
+        # Simulated val set: CE loss
         if self.val_sim_loader is not None:
             metrics = self._validate_sim(epoch)
-
-        # Challenge image evaluation (original behavior)
-        if self.val_data is not None:
-            challenge_metrics = self._validate_challenge(epoch)
-            # If sim validation provided the 'score', keep it as primary;
-            # add challenge score under a different key
-            if 'score' in metrics:
-                metrics['challenge_score'] = challenge_metrics.get('score', 0)
-            else:
-                metrics.update(challenge_metrics)
 
         return metrics
 
     def _validate_challenge(self, epoch):
-        """Validate on challenge test images across all 7 levels."""
+        """Evaluate on challenge test images across all 7 levels (score only).
+
+        Not called during training. Use for testing/evaluation only.
+        """
         gt_np = self.val_data['gt']  # (4, 256, 256)
         full_score = 0
 
@@ -283,10 +277,9 @@ class FCUNetTrainer(BaseTrainer):
         return {'score': avg_score}
 
     def _validate_sim(self, epoch):
-        """Validate on simulated val set: CE loss + scoring at fixed level."""
+        """Validate on simulated val set: CE loss only (no score computation)."""
         fixed_level = self.config.training.get('fixed_level', 1)
         total_loss = 0.0
-        total_score = 0.0
         num_samples = 0
 
         for y, gt in self.val_sim_loader:
@@ -303,23 +296,14 @@ class FCUNetTrainer(BaseTrainer):
                 pred = self.model(y, levels_tensor)
                 loss = self.loss_fn(pred, gt)
             total_loss += loss.item() * y.shape[0]
-
-            pred_argmax = torch.argmax(
-                F.softmax(pred, dim=1), dim=1).cpu().numpy()
-            gt_argmax = torch.argmax(gt, dim=1).cpu().numpy()
-            for i in range(pred_argmax.shape[0]):
-                total_score += FastScoringFunction(
-                    gt_argmax[i], pred_argmax[i])
             num_samples += y.shape[0]
 
         avg_loss = total_loss / max(num_samples, 1)
-        avg_score = total_score / max(num_samples, 1)
 
         self.writer.add_scalar('val_sim/loss', avg_loss, epoch + 1)
-        self.writer.add_scalar('val_sim/score', avg_score, epoch + 1)
-        print(f'  Val(sim) loss: {avg_loss:.5f}, score: {avg_score:.4f}')
+        print(f'  Val(sim) loss: {avg_loss:.5f}')
 
-        return {'score': avg_score, 'val_loss': avg_loss}
+        return {'val_loss': avg_loss}
 
     def evaluate_test(self):
         """Evaluate best model on simulated test set. Returns loss + score."""
@@ -450,6 +434,9 @@ class FCUNetTrainer(BaseTrainer):
             self.global_step = 0
 
         # ---- Stage 2: Full model training ----
+        # Reset early stopping for stage 2 (init stage scores are unreliable)
+        self._es_counter = 0
+        self._es_best_val_loss = None
         print(f'Stage 2: Full training (epochs {self.current_epoch + 1}'
               f'-{total_epochs})')
         if max_iters:
@@ -472,21 +459,47 @@ class FCUNetTrainer(BaseTrainer):
 
             all_metrics = {**epoch_metrics, **val_metrics}
 
+            # ReduceLROnPlateau: step with val_loss (preferred) or avg_loss
             if self.scheduler is not None:
-                self.scheduler.step()
-                all_metrics['lr'] = self.optimizer.param_groups[0]['lr']
-                self.writer.add_scalar('train/lr', all_metrics['lr'],
-                                       epoch + 1)
+                sched_metric = val_metrics.get(
+                    'val_loss', epoch_metrics.get('avg_loss'))
+                if sched_metric is not None:
+                    self.scheduler.step(sched_metric)
+            all_metrics['lr'] = self.optimizer.param_groups[0]['lr']
+            self.writer.add_scalar('train/lr', all_metrics['lr'],
+                                   epoch + 1)
 
             self._log_epoch(epoch, all_metrics)
             self._save_checkpoint('last.pt')
 
-            if 'score' in val_metrics:
+            # Save best if val_loss improved (lower is better)
+            if 'val_loss' in val_metrics:
                 if (self.best_metric is None
-                        or val_metrics['score'] > self.best_metric):
-                    self.best_metric = val_metrics['score']
+                        or val_metrics['val_loss'] < self.best_metric):
+                    self.best_metric = val_metrics['val_loss']
                     self._save_checkpoint('best.pt')
-                    print(f'  New best score: {val_metrics["score"]:.4f}')
+                    print(f'  New best val_loss: '
+                          f'{val_metrics["val_loss"]:.5f}')
+
+            # Early stopping based on val_loss (lower=better)
+            es_loss = val_metrics.get(
+                'val_loss', epoch_metrics.get('avg_loss'))
+            if es_loss is not None:
+                if (self._es_best_val_loss is None
+                        or es_loss < self._es_best_val_loss):
+                    self._es_best_val_loss = es_loss
+                    self._es_counter = 0
+                else:
+                    self._es_counter += 1
+
+            # Early stopping check
+            es_patience = self.config.training.get(
+                'early_stopping_patience', None)
+            if es_patience and self._es_counter >= es_patience:
+                print(f'Early stopping: val_loss not improved for '
+                      f'{es_patience} epochs '
+                      f'(best={self._es_best_val_loss:.4f})')
+                break
 
             if max_iters and self.global_step >= max_iters:
                 print(f'Quick test: reached {max_iters} iterations.')

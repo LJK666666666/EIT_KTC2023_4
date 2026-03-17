@@ -8,7 +8,8 @@
       "Bash(python:*)",
       "Bash(test:*)",
       "Bash(grep -n \"level_to_num\" \"/d/010_CodePrograms/E/EIT_KTC2023_4/KTC2023_SubmissionFiles/ktc_training\"/*.py)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(ls:*)"
     ]
   }
 }

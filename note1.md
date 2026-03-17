@@ -189,3 +189,17 @@ python scripts/generate_data.py --level 1 --num-images 1000 --gpu
   └────────┴────────────┴────────────┴────────┘
 
   实际数据生成（2000+ 样本）时，4 workers 可达 ~3.7x 吞吐提升。40 样本的 benchmark 不适合测量多进程效果——初始化开销主导。
+
+
+# 仅分析（默认 val_loss + patience=15）
+python scripts/analyze_early_stopping.py
+
+# 指定文件夹
+python scripts/analyze_early_stopping.py results/fcunet_scaling_n100_4
+
+# 分析 + 截断（自动备份 .bak）
+python scripts/analyze_early_stopping.py --truncate results/fcunet_scaling_n100_4
+
+# 自定义 patience
+python scripts/analyze_early_stopping.py --patience 10 --truncate results/fcunet_scaling_n100_4
+
