@@ -10,13 +10,19 @@ Prerequisite:
 
 Usage:
     # Quick test (verify pipeline)
-    python scripts/data_scaling_experiment.py --max-iters 2
+    python scripts/data_scaling_experiment.py --mode train --max-iters 2
 
     # Full experiment
-    python scripts/data_scaling_experiment.py --device cuda
+    python scripts/data_scaling_experiment.py --mode train --device cuda
 
     # Custom sizes / epochs
-    python scripts/data_scaling_experiment.py --train-sizes 100 400 --epochs 200
+    python scripts/data_scaling_experiment.py --mode train --train-sizes 100 400 --epochs 200
+
+    # Test only on existing checkpoints
+    python scripts/data_scaling_experiment.py --mode test
+
+    # Summarize and plot existing results
+    python scripts/data_scaling_experiment.py --mode postprocess
 """
 
 import argparse
@@ -32,6 +38,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import torch
+import yaml
 
 from src.configs import get_fcunet_config
 from src.trainers import FCUNetTrainer
@@ -50,21 +57,100 @@ def set_seed(seed):
         torch.cuda.manual_seed_all(seed)
 
 
-def run_single_experiment(n_train, args):
-    """Run one training experiment with n_train samples.
+def load_summary_config(config_path):
+    """Load summary/plot config from YAML if it exists."""
+    if not os.path.exists(config_path):
+        return {'result_subdirs': {}}
 
-    Returns dict with n_train, result_dir, test_loss, test_score.
-    """
+    with open(config_path, 'r', encoding='utf-8') as f:
+        data = yaml.safe_load(f) or {}
+
+    if not isinstance(data, dict):
+        raise ValueError(f'Invalid YAML config format: {config_path}')
+
+    result_subdirs = data.get('result_subdirs', {})
+    if result_subdirs is None:
+        result_subdirs = {}
+    if not isinstance(result_subdirs, dict):
+        raise ValueError(
+            f'"result_subdirs" must be a mapping in {config_path}'
+        )
+
+    return {'result_subdirs': result_subdirs}
+
+
+def find_latest_matching_dir(base_dir, experiment_name):
+    """Find the latest result dir matching {experiment_name}_{num}."""
+    num = 1
+    latest = None
+    while True:
+        dir_name = os.path.join(base_dir, f'{experiment_name}_{num}')
+        if os.path.exists(dir_name):
+            latest = dir_name
+            num += 1
+        else:
+            break
+    return latest
+
+
+def get_override_subdir(summary_config, n_train):
+    """Get YAML override subdir for a given train size."""
+    result_subdirs = summary_config.get('result_subdirs', {})
+    value = result_subdirs.get(n_train, result_subdirs.get(str(n_train), ''))
+    if value is None:
+        return ''
+    return str(value).strip()
+
+
+def load_existing_result(n_train, args, summary_config):
+    """Load an existing experiment result for summary/plot only mode."""
+    result_dir = resolve_result_dir(n_train, args, summary_config)
+
+    test_path = os.path.join(result_dir, 'test_results.json')
+    if not os.path.exists(test_path):
+        raise FileNotFoundError(
+            f'Missing test_results.json for n_train={n_train}: {test_path}'
+        )
+
+    with open(test_path, 'r', encoding='utf-8') as f:
+        test_results = json.load(f)
+
+    return {
+        'n_train': n_train,
+        'result_dir': result_dir,
+        **test_results,
+    }
+
+
+def resolve_result_dir(n_train, args, summary_config):
+    """Resolve result directory using YAML override or latest auto match."""
+    experiment_name = f'fcunet_scaling_n{n_train}'
+    override_subdir = get_override_subdir(summary_config, n_train)
+
+    if override_subdir:
+        result_dir = os.path.join(args.result_dir, override_subdir)
+    else:
+        result_dir = find_latest_matching_dir(args.result_dir, experiment_name)
+
+    if not result_dir or not os.path.exists(result_dir):
+        raise FileNotFoundError(
+            f'No result directory found for n_train={n_train}. '
+            f'Looked under: {args.result_dir}'
+        )
+
+    return result_dir
+
+
+def build_experiment_config(n_train, args):
+    """Build FCUNet config for a given train size."""
     config = get_fcunet_config()
 
-    # Data scaling: fixed level, subset indices
     config.training.fixed_level = 1
     config.data.train_indices = TRAIN_POOL[:n_train]
     config.data.val_indices = VAL_INDICES
     config.data.test_indices = TEST_INDICES
     config.result_base_dir = args.result_dir
 
-    # CLI overrides
     if args.epochs is not None:
         config.training.epochs = args.epochs
     if args.init_epochs is not None:
@@ -80,6 +166,15 @@ def run_single_experiment(n_train, args):
     if args.num_workers is not None:
         config.training.num_workers = args.num_workers
 
+    return config
+
+
+def run_single_experiment(n_train, args):
+    """Run one training experiment with n_train samples.
+
+    Returns dict with n_train, result_dir, test_loss, test_score.
+    """
+    config = build_experiment_config(n_train, args)
     experiment_name = f'fcunet_scaling_n{n_train}'
     trainer = FCUNetTrainer(config=config, experiment_name=experiment_name)
 
@@ -96,6 +191,34 @@ def run_single_experiment(n_train, args):
     }
 
     # Free GPU memory
+    del trainer
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
+    return result
+
+
+def run_test_only(n_train, args, summary_config):
+    """Evaluate existing checkpoint and write test_results.json."""
+    config = build_experiment_config(n_train, args)
+    experiment_name = f'fcunet_scaling_n{n_train}'
+    result_dir = resolve_result_dir(n_train, args, summary_config)
+
+    trainer = FCUNetTrainer(config=config, experiment_name=experiment_name)
+    trainer.result_dir = result_dir
+
+    set_seed(args.seed)
+    trainer.build_model()
+    trainer.build_datasets()
+
+    test_results = trainer.evaluate_test()
+
+    result = {
+        'n_train': n_train,
+        'result_dir': result_dir,
+        **test_results,
+    }
+
     del trainer
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
@@ -204,6 +327,11 @@ def plot_training_curves(all_results, save_dir='results'):
 def parse_args():
     parser = argparse.ArgumentParser(
         description='FCUNet data scaling experiment')
+    parser.add_argument('--mode', type=str, default='train',
+                        choices=['train', 'test', 'postprocess'],
+                        help='train: run full experiment; '
+                             'test: evaluate existing checkpoints only; '
+                             'postprocess: summarize and plot existing results')
     parser.add_argument('--train-sizes', nargs='+', type=int,
                         default=[100, 200, 400, 800],
                         help='Training set sizes (default: 100 200 400 800)')
@@ -226,11 +354,16 @@ def parse_args():
     parser.add_argument('--result-dir', type=str, default='results',
                         help='Base directory for saving results '
                              '(default: results)')
+    parser.add_argument('--summary-config', type=str,
+                        default='scripts/data_scaling_experiment.yaml',
+                        help='YAML config for overriding result subdir names '
+                             'in test/postprocess mode')
     return parser.parse_args()
 
 
 def main():
     args = parse_args()
+    summary_config = load_summary_config(args.summary_config)
 
     print('='*60)
     print('FCUNet Data Scaling Experiment')
@@ -238,6 +371,8 @@ def main():
     print(f'Test: {len(TEST_INDICES)} samples (idx 0-99)')
     print(f'Val:  {len(VAL_INDICES)} samples (idx 100-199)')
     print(f'Seed: {args.seed}')
+    print(f'Mode: {args.mode}')
+    print(f'Summary config: {args.summary_config}')
     print('='*60)
 
     all_results = []
@@ -245,14 +380,28 @@ def main():
     for n_train in args.train_sizes:
         print(f'\n{"="*60}')
         print(f'Experiment: n_train = {n_train}')
-        print(f'  Train indices: {TRAIN_POOL[0]}-{TRAIN_POOL[0]+n_train-1}')
-        print(f'{"="*60}')
-
-        result = run_single_experiment(n_train, args)
+        if args.mode == 'postprocess':
+            override_subdir = get_override_subdir(summary_config, n_train)
+            if override_subdir:
+                print(f'  Using YAML override subdir: {override_subdir}')
+            else:
+                print('  Using latest matching result directory')
+            result = load_existing_result(n_train, args, summary_config)
+        elif args.mode == 'test':
+            override_subdir = get_override_subdir(summary_config, n_train)
+            if override_subdir:
+                print(f'  Testing YAML override subdir: {override_subdir}')
+            else:
+                print('  Testing latest matching result directory')
+            result = run_test_only(n_train, args, summary_config)
+        else:
+            print(f'  Train indices: {TRAIN_POOL[0]}-{TRAIN_POOL[0]+n_train-1}')
+            result = run_single_experiment(n_train, args)
         all_results.append(result)
 
         print(f'\n  n={n_train}: test_loss={result.get("test_loss", "N/A")}, '
               f'test_score={result.get("test_score", "N/A")}')
+        print(f'  result_dir={result["result_dir"]}')
 
     # Save summary
     os.makedirs(args.result_dir, exist_ok=True)
