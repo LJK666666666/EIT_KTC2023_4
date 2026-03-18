@@ -272,7 +272,7 @@ def plot_scaling_results(all_results, save_dir='results'):
 
 
 def plot_training_curves(all_results, save_dir='results'):
-    """Generate training curves comparison plot from training_log.json."""
+    """Generate training/validation loss comparison plot from training_log.json."""
     colors = ['#2196F3', '#4CAF50', '#FF9800', '#F44336']
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
@@ -301,16 +301,16 @@ def plot_training_curves(all_results, save_dir='results'):
             ax1.plot(epochs_loss, losses, linewidth=1.5, color=color,
                      label=label, alpha=0.8)
 
-        # Validation score
-        epochs_score = []
-        scores = []
+        # Validation loss
+        epochs_val_loss = []
+        val_losses = []
         for entry in log:
-            if 'score' in entry:
-                epochs_score.append(entry['epoch'])
-                scores.append(entry['score'])
+            if 'val_loss' in entry:
+                epochs_val_loss.append(entry['epoch'])
+                val_losses.append(entry['val_loss'])
 
-        if epochs_score:
-            ax2.plot(epochs_score, scores, linewidth=1.5, color=color,
+        if epochs_val_loss:
+            ax2.plot(epochs_val_loss, val_losses, linewidth=1.5, color=color,
                      label=label, alpha=0.8)
 
     ax1.set_xlabel('Epoch', fontsize=11)
@@ -319,7 +319,7 @@ def plot_training_curves(all_results, save_dir='results'):
     ax1.grid(True, alpha=0.3)
 
     ax2.set_xlabel('Epoch', fontsize=11)
-    ax2.set_ylabel('Validation Score', fontsize=11)
+    ax2.set_ylabel('Validation Loss', fontsize=11)
     ax2.legend(fontsize=10)
     ax2.grid(True, alpha=0.3)
 

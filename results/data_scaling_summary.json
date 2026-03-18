@@ -1,13 +1,25 @@
 [
   {
+    "n_train": 100,
+    "result_dir": "results\\fcunet_scaling_n100_5",
+    "test_loss": 0.2291720473766327,
+    "test_score": 0.7352503179262021
+  },
+  {
+    "n_train": 200,
+    "result_dir": "results\\fcunet_scaling_n200_1",
+    "test_loss": 0.15335597813129426,
+    "test_score": 0.7996149216567887
+  },
+  {
     "n_train": 400,
-    "result_dir": "/content/drive/MyDrive/results/fcunet_scaling_n400_1",
+    "result_dir": "results\\fcunet_scaling_n400_1",
     "test_loss": 0.10346334218978882,
     "test_score": 0.833007348966339
   },
   {
     "n_train": 800,
-    "result_dir": "/content/drive/MyDrive/results/fcunet_scaling_n800_1",
+    "result_dir": "results\\fcunet_scaling_n800_1",
     "test_loss": 0.07522539108991623,
     "test_score": 0.8683881395945323
   }

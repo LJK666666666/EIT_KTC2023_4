@@ -39,4 +39,8 @@ pip install cupy-cuda12x
 python scripts/benchmark_data_gen.py --num-samples 5
 python scripts/benchmark_data_gen.py --num-samples 40 --workers 4
 
+python scripts/data_scaling_experiment.py --mode postprocess
+
+python scripts/generate_data.py --level 1 --num-images 100 --save-measurements --hdf5 --workers 4 --gpu
+
 

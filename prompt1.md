@@ -11,3 +11,9 @@
 你可以创建一个脚本对 @results\fcunet_scaling_n{num}_{num} 中之前的训练记录'training_log.json'进行patience=15的早停截断吗？
 
 我发现训练过程中验证时间似乎比训练时间还要久，这是为什么？score计算是不是比较费时？
+
+
+创建新脚本实现将 @dataset 中已生成的数据改为.h5格式（支持命令行参数指定数据路径，因为要在colab上使用）。
+将 @scripts\generate_data.py 中生成数据改成.h5格式，支持向.h5文件中继续添加新数据。
+修改 @scripts\data_scaling_experiment.py @scripts\train.py @scripts\evaluate_all.py 支持对.h5格式的数据进行加载处理。
+
