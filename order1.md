@@ -39,7 +39,7 @@ pip install cupy-cuda12x
 python scripts/benchmark_data_gen.py --num-samples 5
 python scripts/benchmark_data_gen.py --num-samples 40 --workers 4
 
-python scripts/data_scaling_experiment.py --mode postprocess
+python scripts/data_scaling_experiment.py --mode postprocess --train-sizes 100 200 400 800 1600 3200 6400
 
 python scripts/generate_data.py --level 1 --num-images 100 --save-measurements --workers 4 --start-idx 1000
 

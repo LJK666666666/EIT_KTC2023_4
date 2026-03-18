@@ -22,5 +22,23 @@
     "result_dir": "results\\fcunet_scaling_n800_1",
     "test_loss": 0.07522539108991623,
     "test_score": 0.8683881395945323
+  },
+  {
+    "n_train": 1600,
+    "result_dir": "results\\fcunet_scaling_n1600_1",
+    "test_loss": 0.07361791223287582,
+    "test_score": 0.8675769950656089
+  },
+  {
+    "n_train": 3200,
+    "result_dir": "results\\fcunet_scaling_n3200_1",
+    "test_loss": 0.09059872776269913,
+    "test_score": 0.8650953692072072
+  },
+  {
+    "n_train": 6400,
+    "result_dir": "results\\fcunet_scaling_n6400_1",
+    "test_loss": 0.08557957828044892,
+    "test_score": 0.8690157218785753
   }
 ]
