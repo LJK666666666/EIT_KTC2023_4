@@ -109,9 +109,18 @@ class FCUNetTrainer(BaseTrainer):
 
         # Training dataset (with noise augmentation)
         train_indices = self.config.data.get('train_indices', None)
-        dataset = FCUNetTrainingData(
-            Uelref, solver.InvLn, base_path,
-            indices=train_indices, augment_noise=True)
+        use_hdf5 = self.config.data.get('use_hdf5', False)
+
+        if use_hdf5:
+            from ..data import FCUNetHDF5Dataset
+            h5_path = self.config.data.hdf5_path
+            dataset = FCUNetHDF5Dataset(
+                h5_path, Uelref, solver.InvLn,
+                indices=train_indices, augment_noise=True)
+        else:
+            dataset = FCUNetTrainingData(
+                Uelref, solver.InvLn, base_path,
+                indices=train_indices, augment_noise=True)
         self.train_loader = DataLoader(
             dataset,
             batch_size=self.config.training.batch_size,
@@ -125,9 +134,14 @@ class FCUNetTrainer(BaseTrainer):
 
         val_indices = self.config.data.get('val_indices', None)
         if val_indices is not None:
-            val_ds = FCUNetTrainingData(
-                Uelref, solver.InvLn, base_path,
-                indices=val_indices, augment_noise=False)
+            if use_hdf5:
+                val_ds = FCUNetHDF5Dataset(
+                    h5_path, Uelref, solver.InvLn,
+                    indices=val_indices, augment_noise=False)
+            else:
+                val_ds = FCUNetTrainingData(
+                    Uelref, solver.InvLn, base_path,
+                    indices=val_indices, augment_noise=False)
             self.val_sim_loader = DataLoader(
                 val_ds,
                 batch_size=self.config.training.batch_size,
@@ -137,9 +151,14 @@ class FCUNetTrainer(BaseTrainer):
 
         test_indices = self.config.data.get('test_indices', None)
         if test_indices is not None:
-            test_ds = FCUNetTrainingData(
-                Uelref, solver.InvLn, base_path,
-                indices=test_indices, augment_noise=False)
+            if use_hdf5:
+                test_ds = FCUNetHDF5Dataset(
+                    h5_path, Uelref, solver.InvLn,
+                    indices=test_indices, augment_noise=False)
+            else:
+                test_ds = FCUNetTrainingData(
+                    Uelref, solver.InvLn, base_path,
+                    indices=test_indices, augment_noise=False)
             self.test_sim_loader = DataLoader(
                 test_ds,
                 batch_size=self.config.training.batch_size,

@@ -5,6 +5,8 @@ Provides:
   - FCUNetTrainingData: Raw measurements + GT for FCUNet direct mapping
   - SimData: 5-channel initial reconstructions + GT (file-based)
   - MmapDataset: Memory-mapped version for large datasets
+  - FCUNetHDF5Dataset: HDF5-backed version of FCUNetTrainingData
+  - SimHDF5Dataset: HDF5-backed version of SimData
 
 Adapted from: KTC2023_SubmissionFiles/ktc_training/src/dataset/SimDataset.py
 """
@@ -177,3 +179,136 @@ class MmapDataset(Dataset):
 
     def __len__(self):
         return self.gts.shape[0]
+
+
+# ---------------------------------------------------------------------------
+# HDF5-backed dataset classes
+# ---------------------------------------------------------------------------
+
+class FCUNetHDF5Dataset(Dataset):
+    """HDF5-backed dataset for FCUNet training.
+
+    Same interface as FCUNetTrainingData: returns (measurements, gt_onehot).
+
+    HDF5 datasets expected:
+        'gt': (N, 256, 256) float32
+        'measurements': (N, 2356) float64
+
+    Args:
+        h5_path: Path to .h5 file.
+        Uref: Reference voltage measurements (1D ndarray).
+        InvLn: Noise precision matrix (sparse).
+        indices: Optional subset of sample indices to use.
+        augment_noise: If True, add random noise as data augmentation.
+    """
+
+    def __init__(self, h5_path, Uref, InvLn,
+                 indices=None, augment_noise=True):
+        import h5py
+        self._h5py = h5py
+
+        self.h5_path = h5_path
+        self.Uref = Uref
+        self.InvLn = InvLn
+        self.augment_noise = augment_noise
+
+        # Read total length (open briefly)
+        with h5py.File(h5_path, 'r') as f:
+            total_len = f['gt'].shape[0]
+
+        self.indices = list(indices) if indices is not None \
+            else list(range(total_len))
+        self._h5_file = None  # Lazy-opened per DataLoader worker
+        print(f'FCUNetHDF5Dataset: {len(self)} samples from {h5_path}')
+
+    def _open_h5(self):
+        if self._h5_file is None:
+            self._h5_file = self._h5py.File(self.h5_path, 'r')
+        return self._h5_file
+
+    def __len__(self):
+        return len(self.indices)
+
+    def __getitem__(self, idx):
+        h5 = self._open_h5()
+        real_idx = self.indices[idx]
+
+        gt_np = h5['gt'][real_idx]                  # (256, 256)
+        measurements = h5['measurements'][real_idx]  # (2356,)
+
+        measurements = np.asarray(measurements).flatten()
+        if self.augment_noise:
+            noise = np.asarray(
+                self.InvLn * np.random.randn(
+                    self.Uref.shape[0], 1)).flatten()
+            measurements = measurements - (self.Uref + noise)
+        else:
+            measurements = measurements - self.Uref
+
+        # One-hot encode GT
+        gt = np.zeros((3, 256, 256), dtype=np.float32)
+        gt[0, :, :] = (gt_np == 0)
+        gt[1, :, :] = (gt_np == 1)
+        gt[2, :, :] = (gt_np == 2)
+
+        return (torch.from_numpy(measurements.astype(np.float32)),
+                torch.from_numpy(gt))
+
+    def __del__(self):
+        if self._h5_file is not None:
+            self._h5_file.close()
+
+
+class SimHDF5Dataset(Dataset):
+    """HDF5-backed dataset for PostP/CondD.
+
+    Same interface as SimData: returns (reco, gt, level).
+
+    HDF5 datasets expected:
+        'gt': (N, 256, 256) float32
+        'reco': (N, 5, 256, 256) float32
+
+    Args:
+        h5_path: Path to .h5 file.
+        level: Difficulty level (1-7).
+        indices: Optional subset of sample indices to use.
+    """
+
+    def __init__(self, h5_path, level, indices=None):
+        import h5py
+        self._h5py = h5py
+
+        self.h5_path = h5_path
+        self.level = level
+
+        with h5py.File(h5_path, 'r') as f:
+            total_len = f['gt'].shape[0]
+
+        self.indices = list(indices) if indices is not None \
+            else list(range(total_len))
+        self._h5_file = None
+        print(f'SimHDF5Dataset: {len(self)} samples for level {self.level}')
+
+    def _open_h5(self):
+        if self._h5_file is None:
+            self._h5_file = self._h5py.File(self.h5_path, 'r')
+        return self._h5_file
+
+    def __len__(self):
+        return len(self.indices)
+
+    def __getitem__(self, idx):
+        h5 = self._open_h5()
+        real_idx = self.indices[idx]
+
+        gt_np = h5['gt'][real_idx]    # (256, 256)
+        reco = h5['reco'][real_idx]   # (5, 256, 256)
+
+        gt = torch.from_numpy(gt_np.astype(np.float32))
+        return (torch.from_numpy(reco.astype(np.float32)),
+                gt,
+                torch.tensor(self.level, dtype=torch.float32))
+
+    def __del__(self):
+        if self._h5_file is not None:
+            self._h5_file.close()

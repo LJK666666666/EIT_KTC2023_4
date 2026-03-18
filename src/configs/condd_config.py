@@ -67,6 +67,8 @@ def get_configs():
     # Tuple indexed by level (index 0 unused, 1-7 = sample counts per level)
     data.level_to_num = (0, 16527, 16619, 16591, 16587, 16604, 15101, 16298)
     data.use_mmap = False
+    data.use_hdf5 = False
+    data.hdf5_path = ''
 
     # validation data
     config.validation.gt_dir = 'KTC2023/Codes_Python/GroundTruths'

@@ -9,7 +9,10 @@
       "Bash(test:*)",
       "Bash(grep -n \"level_to_num\" \"/d/010_CodePrograms/E/EIT_KTC2023_4/KTC2023_SubmissionFiles/ktc_training\"/*.py)",
       "Bash(find:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(wc -l \"D:/010_CodePrograms/E/EIT_KTC2023_4/dataset/level_1/gt/\"*.npy)",
+      "Bash(grep -r \"h5\\\\|hdf5\\\\|HDF5\" /d/010_CodePrograms/E/EIT_KTC2023_4 --include=*.py)",
+      "Bash(grep -r \"\\\\.npy\\\\|np\\\\.save\" /d/010_CodePrograms/E/EIT_KTC2023_4/scripts --include=*.py)"
     ]
   }
 }

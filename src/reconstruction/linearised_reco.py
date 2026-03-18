@@ -162,12 +162,20 @@ class LinearisedRecoFenics():
             except OSError:
                 pass
         else:
-            # Another process is computing — wait for cache file
+            # Another process is computing — wait for complete cache file
             import time as _time
             for _ in range(600):
-                _time.sleep(0.1)
+                _time.sleep(0.5)
                 if os.path.exists(cache_path):
-                    break
+                    # Ensure file is fully written (size stable across 2 checks)
+                    try:
+                        s1 = os.path.getsize(cache_path)
+                        _time.sleep(0.2)
+                        s2 = os.path.getsize(cache_path)
+                        if s1 == s2 and s1 > 0:
+                            break
+                    except OSError:
+                        pass
 
         R_stack = np.load(cache_path, mmap_mode='r')
         self._R_precomputed = [R_stack[i] for i in range(R_stack.shape[0])]
@@ -208,7 +216,10 @@ class LinearisedRecoFenics():
 
         R_stack = np.stack(R_list)
         del R_list
-        np.save(cache_path, R_stack)
+        # Write to temp file then atomic rename to avoid partial-read races
+        tmp_path = cache_path + '.tmp'
+        np.save(tmp_path, R_stack)
+        os.replace(tmp_path, cache_path)
 
     def reconstruct(self, Uel, alpha_tv, alpha_sm, alpha_lm):
         Uel = np.array(Uel)

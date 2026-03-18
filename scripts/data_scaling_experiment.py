@@ -171,6 +171,9 @@ def build_experiment_config(n_train, args):
         config.device = args.device
     if args.num_workers is not None:
         config.training.num_workers = args.num_workers
+    if args.hdf5_path is not None:
+        config.data.use_hdf5 = True
+        config.data.hdf5_path = args.hdf5_path
 
     return config
 
@@ -357,6 +360,9 @@ def parse_args():
                         help='Random seed')
     parser.add_argument('--num-workers', type=int, default=None,
                         help='DataLoader num_workers (config default: 8)')
+    parser.add_argument('--hdf5-path', type=str, default=None,
+                        help='Path to HDF5 training data file '
+                             '(enables HDF5 mode)')
     parser.add_argument('--result-dir', type=str, default='results',
                         help='Base directory for saving results '
                              '(default: results)')

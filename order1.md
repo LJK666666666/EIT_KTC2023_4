@@ -41,6 +41,8 @@ python scripts/benchmark_data_gen.py --num-samples 40 --workers 4
 
 python scripts/data_scaling_experiment.py --mode postprocess
 
-python scripts/generate_data.py --level 1 --num-images 100 --save-measurements --hdf5 --workers 4 --gpu
+python scripts/generate_data.py --level 1 --num-images 100 --save-measurements --workers 4 --start-idx 1000
+
+python scripts/generate_data.py --level 1 --num-images 9000 --save-measurements --workers 8 --output-dir ../drive/MyDrive/dataset --start-idx 1000
 
 

@@ -56,6 +56,8 @@ def get_configs():
     data.train_indices = None    # None=all, list=subset indices
     data.val_indices = None      # None=skip sim val, list=indices
     data.test_indices = None     # None=skip sim test, list=indices
+    data.use_hdf5 = False        # Use HDF5 file instead of per-sample .npy
+    data.hdf5_path = ''          # Path to .h5 file (e.g. dataset/level_1/data.h5)
 
     training.fixed_level = None  # None=random 1-7, int=fixed level
 

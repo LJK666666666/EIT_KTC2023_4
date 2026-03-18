@@ -69,13 +69,19 @@ class PostPTrainer(BaseTrainer):
 
     def build_datasets(self):
         use_mmap = self.config.data.get('use_mmap', False)
+        use_hdf5 = self.config.data.get('use_hdf5', False)
         base_path = self.config.data.get('dataset_base_path', 'dataset')
         mmap_base = self.config.data.get('mmap_base_path', base_path)
         level_to_num = self.config.data.level_to_num
 
         dataset_list = []
         for level in range(1, 8):
-            if use_mmap:
+            if use_hdf5:
+                from ..data import SimHDF5Dataset
+                h5_path = self.config.data.get('hdf5_path', '') or \
+                    os.path.join(base_path, f'level_{level}', 'data.h5')
+                ds = SimHDF5Dataset(h5_path=h5_path, level=level)
+            elif use_mmap:
                 ds = MmapDataset(
                     level=level,
                     num_samples=level_to_num[level],

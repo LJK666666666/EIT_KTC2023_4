@@ -308,11 +308,200 @@ def parse_args():
     parser.add_argument('--workers', type=int, default=1,
                         help='Number of parallel workers (CPU multiprocess, '
                              'default: 1 = serial)')
+    parser.add_argument('--chunk-size', type=int, default=1000,
+                        help='Batch flush size for multiprocess workers '
+                             '(default: 1000 samples per batch file)')
     return parser.parse_args()
 
 
+def _generate_one_sample(solver, mesh, z, reconstructor, alphas,
+                         do_meas, do_reco):
+    """Generate one training sample. Returns (gt, measurements_or_None, reco_or_None)."""
+    sigma_pix = create_phantoms()
+
+    background = 0.745
+    resistive = np.random.rand() * 0.1 + 0.025
+    conductive = np.random.rand() + 5.0
+
+    sigma = np.zeros(sigma_pix.shape)
+    sigma[sigma_pix == 0.0] = background
+    sigma[sigma_pix == 1.0] = resistive
+    sigma[sigma_pix == 2.0] = conductive
+
+    sigma_gt = image_to_mesh(np.flipud(sigma).T, mesh)
+
+    Uel_sim = np.asarray(solver.SolveForward(sigma_gt, z)).reshape(-1, 1)
+    noise = np.asarray(
+        solver.InvLn * np.random.randn(Uel_sim.shape[0], 1)).reshape(-1, 1)
+    Uel_noisy = Uel_sim + noise
+
+    meas = Uel_noisy.flatten() if do_meas else None
+
+    reco = None
+    if do_reco:
+        delta_sigma_list = reconstructor.reconstruct_list(Uel_noisy, alphas)
+        sigma_images = [
+            reconstructor.interpolate_to_image(ds)
+            for ds in delta_sigma_list
+        ]
+        reco = np.stack(sigma_images)  # (5, 256, 256)
+
+    return sigma_pix, meas, reco
+
+
+def _init_solver_and_reco(level, ref_path, mesh_name, use_gpu,
+                          measurements_only, save_measurements):
+    """Shared initialisation for both single-process and worker paths."""
+    y_ref = loadmat(ref_path)
+    Injref = y_ref['Injref']
+    Mpat = y_ref['Mpat']
+
+    mesh, mesh2 = load_mesh(mesh_name)
+
+    Nel = 32
+    z = 1e-6 * np.ones((Nel, 1))
+    vincl = np.ones((Nel - 1, 76), dtype=bool)
+
+    solver = EITFEM(mesh2, Injref, Mpat, vincl, use_gpu=use_gpu)
+
+    noise_std1 = 0.05
+    noise_std2 = 0.01
+    solver.SetInvGamma(noise_std1, noise_std2, y_ref['Uelref'])
+
+    sigma_bg = np.ones((mesh.g.shape[0], 1)) * 0.745
+    Uelref = np.asarray(solver.SolveForward(sigma_bg, z)).reshape(-1, 1)
+    noise = np.asarray(
+        solver.InvLn * np.random.randn(Uelref.shape[0], 1)).reshape(-1, 1)
+    Uelref = Uelref + noise
+
+    do_reco = not measurements_only
+    do_meas = save_measurements or measurements_only
+
+    reconstructor = None
+    alphas = None
+    if do_reco:
+        from src.reconstruction.linearised_reco import LinearisedRecoFenics
+        from src.utils.measurement import create_vincl as _create_vincl
+        alphas = LEVEL_TO_ALPHAS[level]
+        B = Mpat.T
+        vincl_level = _create_vincl(level, Injref)
+        reconstructor = LinearisedRecoFenics(
+            Uelref, B, vincl_level, mesh_name='sparse',
+            base_path='KTC2023_SubmissionFiles/data',
+            use_gpu=use_gpu, alphas=alphas)
+
+    return solver, mesh, z, reconstructor, alphas, do_meas, do_reco
+
+
+def _mp_worker_chunked(kwargs):
+    """Worker that accumulates samples in memory and flushes to .npz batches."""
+    import os
+    os.environ['MKL_NUM_THREADS'] = '1'
+    os.environ['OMP_NUM_THREADS'] = '1'
+    try:
+        import mkl
+        mkl.set_num_threads(1)
+    except ImportError:
+        pass
+    sys.path.insert(
+        0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+    worker_id = kwargs['worker_id']
+    chunk_size = kwargs.get('chunk_size', 1000)
+    level = kwargs['level']
+    num_images = kwargs['num_images']
+    output_dir = kwargs['output_dir']
+
+    base_path = os.path.join(output_dir, f'level_{level}')
+    batch_dir = os.path.join(base_path, '_batches')
+    os.makedirs(batch_dir, exist_ok=True)
+
+    solver, mesh, z, reconstructor, alphas, do_meas, do_reco = \
+        _init_solver_and_reco(
+            level, kwargs['ref_path'], kwargs['mesh_name'],
+            use_gpu=False,
+            measurements_only=kwargs['measurements_only'],
+            save_measurements=kwargs['save_measurements'])
+
+    gt_buf, meas_buf, reco_buf = [], [], []
+    chunk_idx = 0
+
+    def flush():
+        nonlocal chunk_idx
+        if not gt_buf:
+            return
+        data = {'gt': np.stack(gt_buf).astype(np.float32)}
+        if meas_buf:
+            data['measurements'] = np.stack(meas_buf).astype(np.float64)
+        if reco_buf:
+            data['reco'] = np.stack(reco_buf).astype(np.float32)
+        path = os.path.join(
+            batch_dir, f'batch_{worker_id:02d}_{chunk_idx:04d}.npz')
+        np.savez(path, **data)
+        gt_buf.clear()
+        meas_buf.clear()
+        reco_buf.clear()
+        chunk_idx += 1
+
+    for i in tqdm(range(num_images), desc=f'Worker {worker_id}',
+                  position=worker_id, leave=False):
+        gt, meas, reco = _generate_one_sample(
+            solver, mesh, z, reconstructor, alphas, do_meas, do_reco)
+        gt_buf.append(gt)
+        if meas is not None:
+            meas_buf.append(meas)
+        if reco is not None:
+            reco_buf.append(reco)
+
+        if len(gt_buf) >= chunk_size:
+            flush()
+
+    flush()  # remaining
+    return {'worker_id': worker_id, 'num_chunks': chunk_idx}
+
+
+def _merge_batches_to_hdf5(base_path):
+    """Merge .npz batch files from _batches/ into data.h5, then clean up."""
+    import glob as _glob
+    import h5py
+
+    batch_dir = os.path.join(base_path, '_batches')
+    h5_path = os.path.join(base_path, 'data.h5')
+    batch_files = sorted(_glob.glob(os.path.join(batch_dir, 'batch_*.npz')))
+
+    if not batch_files:
+        print(f'  No batch files found in {batch_dir}')
+        return
+
+    with h5py.File(h5_path, 'w') as h5f:
+        for bf in tqdm(batch_files, desc='Merging to HDF5'):
+            data = np.load(bf)
+            for key in data.files:
+                arr = data[key]
+                if key not in h5f:
+                    h5f.create_dataset(
+                        key, data=arr,
+                        maxshape=(None, *arr.shape[1:]),
+                        chunks=(1, *arr.shape[1:]))
+                else:
+                    ds = h5f[key]
+                    old_len = ds.shape[0]
+                    ds.resize(old_len + arr.shape[0], axis=0)
+                    ds[old_len:] = arr
+
+    # Clean up batch files
+    import shutil
+    shutil.rmtree(batch_dir)
+
+    # Print summary
+    with h5py.File(h5_path, 'r') as f:
+        for k, v in f.items():
+            print(f'  {k}: {v.shape} ({v.dtype})')
+    print(f'  HDF5 saved to: {h5_path}')
+
+
 def _mp_generate_chunk(kwargs):
-    """Wrapper for multiprocessing: generate a chunk of samples."""
+    """Legacy wrapper for multiprocessing (per-sample .npy output)."""
     import os
     os.environ['MKL_NUM_THREADS'] = '1'
     os.environ['OMP_NUM_THREADS'] = '1'
@@ -344,16 +533,18 @@ def main():
 
     for level in levels:
         if args.workers > 1 and not args.gpu:
-            # Multiprocess: split samples across workers (CPU only)
+            # Multiprocess: chunked workers → .npz batches → merge to .h5
             from concurrent.futures import ProcessPoolExecutor
             n = args.num_images
             w = args.workers
-            chunk_size = n // w
+            samples_per_worker = n // w
             worker_args = []
             for i in range(w):
-                start = args.start_idx + i * chunk_size
-                count = chunk_size if i < w - 1 else n - i * chunk_size
+                count = samples_per_worker if i < w - 1 \
+                    else n - i * samples_per_worker
                 worker_args.append({
+                    'worker_id': i,
+                    'chunk_size': args.chunk_size,
                     'level': level,
                     'num_images': count,
                     'output_dir': args.output_dir,
@@ -361,18 +552,20 @@ def main():
                     'mesh_name': args.mesh_name,
                     'save_measurements': args.save_measurements,
                     'measurements_only': args.measurements_only,
-                    'start_idx': start,
-                    'use_gpu': False,
-                    'use_hdf5': False,  # HDF5 not supported with multiprocess
                 })
             print(f'Using {w} workers for level {level} '
-                  f'({chunk_size} samples/worker)...')
+                  f'({samples_per_worker} samples/worker, '
+                  f'chunk_size={args.chunk_size})...')
             t0 = time.time()
             with ProcessPoolExecutor(max_workers=w) as pool:
-                list(pool.map(_mp_generate_chunk, worker_args))
+                list(pool.map(_mp_worker_chunked, worker_args))
             elapsed = time.time() - t0
             print(f'Level {level}: {n} samples in {elapsed:.1f}s '
                   f'({elapsed/n*1000:.0f} ms/sample throughput)')
+
+            # Merge .npz batches into final .h5
+            base_path = os.path.join(args.output_dir, f'level_{level}')
+            _merge_batches_to_hdf5(base_path)
         else:
             generate_data(
                 level=level,

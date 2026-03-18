@@ -60,6 +60,9 @@ def parse_args():
                         help='Quick test: stop after N iterations')
     parser.add_argument('--num-workers', type=int, default=None,
                         help='DataLoader num_workers')
+    parser.add_argument('--hdf5-path', type=str, default=None,
+                        help='Path to HDF5 training data file '
+                             '(enables HDF5 mode)')
 
     # Resume
     parser.add_argument('--resume', type=str, default=None,
@@ -140,6 +143,9 @@ def _apply_overrides(config, args):
         config.device = args.device
     if args.num_workers is not None:
         config.training.num_workers = args.num_workers
+    if args.hdf5_path is not None:
+        config.data.use_hdf5 = True
+        config.data.hdf5_path = args.hdf5_path
 
 
 if __name__ == '__main__':
