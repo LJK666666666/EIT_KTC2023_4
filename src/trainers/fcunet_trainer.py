@@ -285,15 +285,17 @@ class FCUNetTrainer(BaseTrainer):
                 mean_score += score
             mean_score /= pred_argmax.shape[0]
 
-            self.writer.add_scalar(
-                f'val/score_level{level}', mean_score, epoch + 1)
+            if self.writer is not None:
+                self.writer.add_scalar(
+                    f'val/score_level{level}', mean_score, epoch + 1)
             full_score += mean_score
 
         avg_score = full_score / 7
-        self.writer.add_scalar('val/avg_score', avg_score, epoch + 1)
+        if self.writer is not None:
+            self.writer.add_scalar('val/avg_score', avg_score, epoch + 1)
         print(f'  Val(challenge) score: {avg_score:.4f} (sum={full_score:.4f})')
 
-        return {'score': avg_score}
+        return {'challenge_score': avg_score}
 
     def _validate_sim(self, epoch):
         """Validate on simulated val set: CE loss only (no score computation)."""
@@ -319,21 +321,26 @@ class FCUNetTrainer(BaseTrainer):
 
         avg_loss = total_loss / max(num_samples, 1)
 
-        self.writer.add_scalar('val_sim/loss', avg_loss, epoch + 1)
+        if self.writer is not None:
+            self.writer.add_scalar('val_sim/loss', avg_loss, epoch + 1)
         print(f'  Val(sim) loss: {avg_loss:.5f}')
 
         return {'val_loss': avg_loss}
+
+    def _get_eval_checkpoint_path(self):
+        """Return best checkpoint path, falling back to last.pt."""
+        import os
+        best_path = os.path.join(self.result_dir, 'best.pt')
+        if not os.path.exists(best_path):
+            best_path = os.path.join(self.result_dir, 'last.pt')
+        return best_path
 
     def evaluate_test(self):
         """Evaluate best model on simulated test set. Returns loss + score."""
         if self.test_sim_loader is None:
             return {}
 
-        import os
-        best_path = os.path.join(self.result_dir, 'best.pt')
-        if not os.path.exists(best_path):
-            best_path = os.path.join(self.result_dir, 'last.pt')
-        self._load_checkpoint(best_path)
+        self._load_checkpoint(self._get_eval_checkpoint_path())
         self.model.eval()
 
         fixed_level = self.config.training.get('fixed_level', 1)
@@ -378,6 +385,17 @@ class FCUNetTrainer(BaseTrainer):
         print(f'Test results saved to: {test_path}')
 
         return results
+
+    def evaluate_challenge(self):
+        """Evaluate best model on challenge validation images."""
+        if self.val_data is None:
+            return {}
+
+        self._load_checkpoint(self._get_eval_checkpoint_path())
+        self.model.eval()
+
+        with torch.no_grad():
+            return self._validate_challenge(epoch=self.current_epoch)
 
     # ------------------------------------------------------------------
     # Override main train loop for two-stage training

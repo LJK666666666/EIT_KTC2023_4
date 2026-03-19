@@ -245,12 +245,19 @@ def run_single_experiment(n_train, args, split):
 
     # Evaluate on test set using best checkpoint
     test_results = trainer.evaluate_test()
+    challenge_results = trainer.evaluate_challenge()
 
     result = {
         'n_train': n_train,
         'result_dir': trainer.result_dir,
         **test_results,
+        **challenge_results,
     }
+
+    test_path = os.path.join(trainer.result_dir, 'test_results.json')
+    with open(test_path, 'w', encoding='utf-8') as f:
+        json.dump({k: v for k, v in result.items() if k != 'result_dir'},
+                  f, indent=2)
 
     # Free GPU memory
     del trainer
@@ -274,12 +281,19 @@ def run_test_only(n_train, args, summary_config, split):
     trainer.build_datasets()
 
     test_results = trainer.evaluate_test()
+    challenge_results = trainer.evaluate_challenge()
 
     result = {
         'n_train': n_train,
         'result_dir': result_dir,
         **test_results,
+        **challenge_results,
     }
+
+    test_path = os.path.join(result_dir, 'test_results.json')
+    with open(test_path, 'w', encoding='utf-8') as f:
+        json.dump({k: v for k, v in result.items() if k != 'result_dir'},
+                  f, indent=2)
 
     del trainer
     if torch.cuda.is_available():
