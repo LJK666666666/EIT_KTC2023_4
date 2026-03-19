@@ -7,6 +7,7 @@ Stage 2 (main epochs):  Train full model with CrossEntropyLoss.
 Reference: KTC2023_SubmissionFiles/ktc_training/train_FCUNet.py
 """
 
+import os
 import numpy as np
 import torch
 import torch.nn as nn
