@@ -2,8 +2,8 @@
 Data scaling experiment for FCUNet on KTC2023 EIT level_1 data.
 
 Studies how FCUNet reconstruction quality changes with training data size.
-Trains 4 models on nested subsets [100, 200, 400, 800] of 1000 simulated
-samples, evaluates each on a fixed 100-sample test set.
+Uses the first 100 available samples for test, the next 100 for validation,
+and all remaining samples as the training pool. Training subsets are nested.
 
 Prerequisite:
     python scripts/generate_data.py --level 1 --num-images 1000 --measurements-only
@@ -43,12 +43,6 @@ import yaml
 
 from src.configs import get_fcunet_config
 from src.trainers import FCUNetTrainer
-
-# Fixed data split (by filename index, sorted)
-TEST_INDICES = list(range(0, 100))
-VAL_INDICES = list(range(100, 200))
-TRAIN_POOL = list(range(200, 1000))
-
 
 def set_seed(seed):
     random.seed(seed)
@@ -108,6 +102,60 @@ def get_override_subdir(summary_config, n_train):
     return str(value).strip()
 
 
+def _extract_sample_index(filename):
+    """Extract numeric sample index from gt_ztm_000042.npy -> 42."""
+    stem = filename.rsplit('.', 1)[0]
+    return int(stem.split('_')[-1])
+
+
+def discover_available_indices(args):
+    """Discover sorted sample indices from dataset files or HDF5."""
+    config = get_fcunet_config()
+
+    if args.hdf5_path is not None:
+        import h5py
+        with h5py.File(args.hdf5_path, 'r') as f:
+            total_len = f['gt'].shape[0]
+        return list(range(total_len))
+
+    gt_dir = os.path.join(config.data.dataset_base_path, 'gt')
+    if not os.path.isdir(gt_dir):
+        raise FileNotFoundError(f'Dataset gt directory not found: {gt_dir}')
+
+    indices = []
+    for filename in os.listdir(gt_dir):
+        if filename.endswith('.npy'):
+            indices.append(_extract_sample_index(filename))
+
+    if not indices:
+        raise FileNotFoundError(f'No .npy samples found under: {gt_dir}')
+
+    return sorted(indices)
+
+
+def build_data_split(args):
+    """Build test/val/train splits from available sorted sample indices."""
+    all_indices = discover_available_indices(args)
+
+    if len(all_indices) < 201:
+        raise ValueError(
+            'Need at least 201 samples to create '
+            '100 test + 100 val + remaining train split. '
+            f'Found only {len(all_indices)} samples.'
+        )
+
+    test_indices = all_indices[:100]
+    val_indices = all_indices[100:200]
+    train_pool = all_indices[200:]
+
+    return {
+        'all_indices': all_indices,
+        'test_indices': test_indices,
+        'val_indices': val_indices,
+        'train_pool': train_pool,
+    }
+
+
 def load_existing_result(n_train, args, summary_config):
     """Load an existing experiment result for summary/plot only mode."""
     result_dir = resolve_result_dir(n_train, args, summary_config)
@@ -147,14 +195,19 @@ def resolve_result_dir(n_train, args, summary_config):
     return result_dir
 
 
-def build_experiment_config(n_train, args):
+def build_experiment_config(n_train, args, split):
     """Build FCUNet config for a given train size."""
     config = get_fcunet_config()
 
     config.training.fixed_level = 1
-    config.data.train_indices = TRAIN_POOL[:n_train]
-    config.data.val_indices = VAL_INDICES
-    config.data.test_indices = TEST_INDICES
+    if n_train > len(split['train_pool']):
+        raise ValueError(
+            f'n_train={n_train} exceeds available training pool size '
+            f'{len(split["train_pool"])}.'
+        )
+    config.data.train_indices = split['train_pool'][:n_train]
+    config.data.val_indices = split['val_indices']
+    config.data.test_indices = split['test_indices']
     config.result_base_dir = args.result_dir
 
     if args.epochs is not None:
@@ -178,12 +231,12 @@ def build_experiment_config(n_train, args):
     return config
 
 
-def run_single_experiment(n_train, args):
+def run_single_experiment(n_train, args, split):
     """Run one training experiment with n_train samples.
 
     Returns dict with n_train, result_dir, test_loss, test_score.
     """
-    config = build_experiment_config(n_train, args)
+    config = build_experiment_config(n_train, args, split)
     experiment_name = f'fcunet_scaling_n{n_train}'
     trainer = FCUNetTrainer(config=config, experiment_name=experiment_name)
 
@@ -207,9 +260,9 @@ def run_single_experiment(n_train, args):
     return result
 
 
-def run_test_only(n_train, args, summary_config):
+def run_test_only(n_train, args, summary_config, split):
     """Evaluate existing checkpoint and write test_results.json."""
-    config = build_experiment_config(n_train, args)
+    config = build_experiment_config(n_train, args, split)
     experiment_name = f'fcunet_scaling_n{n_train}'
     result_dir = resolve_result_dir(n_train, args, summary_config)
 
@@ -376,12 +429,18 @@ def parse_args():
 def main():
     args = parse_args()
     summary_config = load_summary_config(args.summary_config)
+    split = build_data_split(args)
 
     print('='*60)
     print('FCUNet Data Scaling Experiment')
     print(f'Train sizes: {args.train_sizes}')
-    print(f'Test: {len(TEST_INDICES)} samples (idx 0-99)')
-    print(f'Val:  {len(VAL_INDICES)} samples (idx 100-199)')
+    print(f'Total available samples: {len(split["all_indices"])}')
+    print(f'Test: {len(split["test_indices"])} samples '
+          f'({split["test_indices"][0]}-{split["test_indices"][-1]})')
+    print(f'Val:  {len(split["val_indices"])} samples '
+          f'({split["val_indices"][0]}-{split["val_indices"][-1]})')
+    print(f'Train pool: {len(split["train_pool"])} samples '
+          f'({split["train_pool"][0]}-{split["train_pool"][-1]})')
     print(f'Seed: {args.seed}')
     print(f'Mode: {args.mode}')
     print(f'Summary config: {args.summary_config}')
@@ -405,10 +464,11 @@ def main():
                 print(f'  Testing YAML override subdir: {override_subdir}')
             else:
                 print('  Testing latest matching result directory')
-            result = run_test_only(n_train, args, summary_config)
+            result = run_test_only(n_train, args, summary_config, split)
         else:
-            print(f'  Train indices: {TRAIN_POOL[0]}-{TRAIN_POOL[0]+n_train-1}')
-            result = run_single_experiment(n_train, args)
+            print(f'  Train indices: '
+                  f'{split["train_pool"][0]}-{split["train_pool"][n_train - 1]}')
+            result = run_single_experiment(n_train, args, split)
         all_results.append(result)
 
         print(f'\n  n={n_train}: test_loss={result.get("test_loss", "N/A")}, '

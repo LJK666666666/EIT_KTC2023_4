@@ -45,4 +45,5 @@ python scripts/generate_data.py --level 1 --num-images 100 --save-measurements -
 
 python scripts/generate_data.py --level 1 --num-images 9000 --save-measurements --workers 8 --output-dir ../drive/MyDrive/dataset --start-idx 1000
 
+python scripts/npy_to_hdf5.py --input-dir dataset/level_1 --output dataset/level_1/data.h5
 

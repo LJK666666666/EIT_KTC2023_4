@@ -21,4 +21,4 @@
 将 @scripts\generate_data.py 中生成数据机制改成：1、比如 8 个 Worker（多进程）在内存里疯狂算数据。2、算出来的结果不要立刻写盘，而是暂存在每个 Worker 自己内存的 List 里。3、当某个 Worker 的 List 攒够了 1000 个样本（大约也就占用一两百 MB 内存），它就一次性把这 1000 个样本打包成一个稍微大一点的 .npy 或 .npz 写到硬盘里。4、等所有进程跑完，你得到了 100 个包含了 1000 个样本的中型文件。此时调用前面写的新脚本，花几分钟时间，极其顺滑地把这 100 个文件一口气导入到最终的 .h5 文件中。
 修改 @scripts\data_scaling_experiment.py @scripts\train.py @scripts\evaluate_all.py 支持对.h5格式的数据进行加载处理。
 
-
+=写入云盘的通信瓶颈
