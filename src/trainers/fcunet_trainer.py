@@ -406,6 +406,7 @@ class FCUNetTrainer(BaseTrainer):
         max_iters = self.config.training.get('max_iters', None)
         init_epochs = self.config.training.init_epochs
         total_epochs = self.config.training.epochs
+        save_freq = self.config.training.get('save_freq', 5)
 
         # ---- Stage 1: Pre-train initial_linear ----
         if self.training_stage == 1:
@@ -438,14 +439,18 @@ class FCUNetTrainer(BaseTrainer):
                 print(f'  Init Epoch {epoch + 1} Avg Loss: {avg_loss:.5f}')
                 self._log_epoch(epoch, {'avg_loss': avg_loss,
                                         'stage': 'init'})
-                self._save_checkpoint('last.pt')
+                if save_freq > 0 and (epoch + 1) % save_freq == 0:
+                    self._save_checkpoint('last.pt')
 
                 if max_iters and self.global_step >= max_iters:
+                    self._save_checkpoint('last.pt')
                     print(f'Quick test: reached {max_iters} iterations.')
                     if self.writer:
                         self.writer.close()
                     print(f'Training complete. Results: {self.result_dir}')
                     return
+
+            self._save_checkpoint('last.pt')
 
             # Transition to stage 2
             self.training_stage = 2
@@ -489,7 +494,8 @@ class FCUNetTrainer(BaseTrainer):
                                    epoch + 1)
 
             self._log_epoch(epoch, all_metrics)
-            self._save_checkpoint('last.pt')
+            if save_freq > 0 and (epoch + 1) % save_freq == 0:
+                self._save_checkpoint('last.pt')
 
             # Save best if val_loss improved (lower is better)
             if 'val_loss' in val_metrics:
@@ -523,6 +529,8 @@ class FCUNetTrainer(BaseTrainer):
             if max_iters and self.global_step >= max_iters:
                 print(f'Quick test: reached {max_iters} iterations.')
                 break
+
+        self._save_checkpoint('last.pt')
 
         if self.writer:
             self.writer.close()

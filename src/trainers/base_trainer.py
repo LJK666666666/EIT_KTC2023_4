@@ -13,6 +13,7 @@ Provides the template for all training workflows with:
 from abc import ABC, abstractmethod
 import json
 import os
+import tempfile
 import yaml
 
 import torch
@@ -151,6 +152,7 @@ class BaseTrainer(ABC):
 
         max_iters = self.config.training.get('max_iters', None)
         total_epochs = self.config.training.epochs
+        save_freq = self.config.training.get('save_freq', 5)
 
         print(f'Training epochs {self.current_epoch + 1} to {total_epochs}')
         print(f'Results directory: {self.result_dir}')
@@ -186,8 +188,9 @@ class BaseTrainer(ABC):
 
             self._log_epoch(epoch, all_metrics)
 
-            # Save last checkpoint every epoch
-            self._save_checkpoint('last.pt')
+            # Save last checkpoint periodically to reduce cloud-drive I/O.
+            if save_freq > 0 and (epoch + 1) % save_freq == 0:
+                self._save_checkpoint('last.pt')
 
             # Save best if val_loss improved (lower is better)
             if 'val_loss' in val_metrics:
@@ -223,6 +226,9 @@ class BaseTrainer(ABC):
             if max_iters and self.global_step >= max_iters:
                 print(f'Quick test: reached {max_iters} iterations, stopping.')
                 break
+
+        # Always persist the final resumable checkpoint once training stops.
+        self._save_checkpoint('last.pt')
 
         if self.writer:
             self.writer.close()
@@ -269,6 +275,30 @@ class BaseTrainer(ABC):
     # Checkpoint methods
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _atomic_torch_save(obj, path):
+        """Atomically save a PyTorch object to avoid partial checkpoint files."""
+        directory = os.path.dirname(path) or '.'
+        os.makedirs(directory, exist_ok=True)
+
+        fd, tmp_path = tempfile.mkstemp(
+            prefix=os.path.basename(path) + '.',
+            suffix='.tmp',
+            dir=directory,
+        )
+        try:
+            with os.fdopen(fd, 'wb') as f:
+                torch.save(obj, f)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_path, path)
+        except Exception:
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
+            raise
+
     def _save_checkpoint(self, filename):
         """Save checkpoint with all state for resume."""
         state = {
@@ -285,7 +315,7 @@ class BaseTrainer(ABC):
         }
         state.update(self.get_checkpoint_extra())
         path = os.path.join(self.result_dir, filename)
-        torch.save(state, path)
+        self._atomic_torch_save(state, path)
 
     def _load_checkpoint(self, path):
         """Load checkpoint for resume training."""

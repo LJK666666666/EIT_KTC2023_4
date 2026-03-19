@@ -9,7 +9,7 @@ def get_base_training_config():
     training.num_workers = 4
     training.pin_memory = True
     training.val_freq = 1            # validate every N epochs (0 = disabled)
-    training.save_freq = 1           # save checkpoint every N epochs
+    training.save_freq = 5           # save last.pt every N epochs
     training.grad_clip_norm = 1.0
 
     # ReduceLROnPlateau: reduce LR when val score plateaus

@@ -47,3 +47,5 @@ python scripts/generate_data.py --level 1 --num-images 9000 --save-measurements 
 
 python scripts/npy_to_hdf5.py --input-dir dataset/level_1 --output dataset/level_1/data.h5
 
+python scripts/data_scaling_experiment.py --train-sizes 100 --batch-size 8 --max-iters 1 --hdf5-path dataset/level_1/data.h5
+
