@@ -92,18 +92,35 @@ def evaluate_method(method_name, pipeline, levels, eval_loader, output_dir,
         reconstructions = []
         scores = []
 
-        pbar = tqdm(enumerate(measurements), total=len(measurements),
-                    desc=f'    Reconstructing', leave=False)
-        for i, Uel in pbar:
+        if hasattr(pipeline, 'reconstruct_batch'):
             t0 = time.time()
-            reco = pipeline.reconstruct(Uel, ref_data, level)
+            reconstructions = pipeline.reconstruct_batch(
+                measurements, ref_data, level)
             elapsed = time.time() - t0
-            reconstructions.append(reco)
 
-            if i < len(ground_truths):
-                score = scoring_function(ground_truths[i], reco)
-                scores.append(score)
-                pbar.set_postfix(score=f'{score:.4f}', time=f'{elapsed:.1f}s')
+            pbar = tqdm(range(len(reconstructions)), total=len(reconstructions),
+                        desc='    Reconstructing', leave=False)
+            for i in pbar:
+                if i < len(ground_truths):
+                    score = scoring_function(ground_truths[i],
+                                             reconstructions[i])
+                    scores.append(score)
+                    pbar.set_postfix(score=f'{score:.4f}',
+                                     time=f'{elapsed / len(reconstructions):.1f}s')
+        else:
+            pbar = tqdm(enumerate(measurements), total=len(measurements),
+                        desc='    Reconstructing', leave=False)
+            for i, Uel in pbar:
+                t0 = time.time()
+                reco = pipeline.reconstruct(Uel, ref_data, level)
+                elapsed = time.time() - t0
+                reconstructions.append(reco)
+
+                if i < len(ground_truths):
+                    score = scoring_function(ground_truths[i], reco)
+                    scores.append(score)
+                    pbar.set_postfix(score=f'{score:.4f}',
+                                     time=f'{elapsed:.1f}s')
 
         sum_score = float(np.sum(scores))
         mean_score = float(np.mean(scores)) if scores else 0.0

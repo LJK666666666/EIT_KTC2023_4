@@ -32,13 +32,16 @@ def set_seed(seed):
     np.random.seed(seed)
 
 
-def detect_optimizations(reconstructor):
+def detect_optimizations(reconstructor, solver=None):
     """Detect active optimization items by inspecting runtime objects."""
     # A-G are always active (baked into source code)
     opts = ['A', 'B', 'C', 'D', 'E', 'F', 'G']
     if (reconstructor is not None
             and getattr(reconstructor, '_R_precomputed', None) is not None):
         opts.append('H')
+    if (solver is not None
+            and getattr(solver, '_b_rank', None) is not None):
+        opts.append('K3')
     return sorted(opts)
 
 
@@ -55,7 +58,7 @@ def get_next_output_path(base_path):
 
 def run_benchmark(num_samples, level, ref_path, mesh_name,
                   measurements_only, use_gpu, seed):
-    """Run data generation benchmark, return (timing_dict, reconstructor)."""
+    """Run data generation benchmark, return (timing_dict, reconstructor, solver)."""
     # Use a FIXED seed for Uelref computation so all workers produce the
     # same Uelref → same R-matrix cache key → mmap cache hit (zero-copy).
     # The worker-specific seed is applied AFTER Uelref for sample generation.
@@ -156,7 +159,7 @@ def run_benchmark(num_samples, level, ref_path, mesh_name,
         timing['interp'].append(t_interp)
         timing['total'].append(time.time() - t_total)
 
-    return timing, reconstructor
+    return timing, reconstructor, solver
 
 
 def format_table(cpu_timing, gpu_timing, num_samples):
@@ -214,8 +217,8 @@ def _mp_run_benchmark(kwargs):
 
     sys.path.insert(0, os.path.dirname(os.path.dirname(
         os.path.abspath(__file__))))
-    timing, reco = run_benchmark(**kwargs)
-    opts = detect_optimizations(reco)
+    timing, reco, solver = run_benchmark(**kwargs)
+    opts = detect_optimizations(reco, solver)
     gpu_name = None
     if kwargs.get('use_gpu'):
         try:
@@ -261,15 +264,15 @@ def main():
     # Run CPU benchmark directly in main process
     print('Running CPU benchmark...')
     t0 = time.time()
-    cpu_timing, cpu_reco = run_benchmark(
+    cpu_timing, cpu_reco, cpu_solver = run_benchmark(
         **bench_kwargs, use_gpu=False)
     cpu_total = time.time() - t0
-    cpu_opts = detect_optimizations(cpu_reco)
+    cpu_opts = detect_optimizations(cpu_reco, cpu_solver)
     print(f'  CPU total: {cpu_total:.1f}s '
           f'({np.mean(cpu_timing["total"])*1000:.0f} ms/sample avg)')
 
     # Free large arrays before GPU run
-    del cpu_reco
+    del cpu_reco, cpu_solver
     import gc; gc.collect()
 
     # Run GPU benchmark directly (may fail with large precomputed matrices)
@@ -279,14 +282,14 @@ def main():
     print('Running GPU benchmark...')
     try:
         t0 = time.time()
-        gpu_timing_raw, gpu_reco = run_benchmark(
+        gpu_timing_raw, gpu_reco, gpu_solver = run_benchmark(
             **bench_kwargs, use_gpu=True)
         gpu_total = time.time() - t0
-        gpu_opts = detect_optimizations(gpu_reco)
+        gpu_opts = detect_optimizations(gpu_reco, gpu_solver)
         gpu_timing = gpu_timing_raw
         print(f'  GPU total: {gpu_total:.1f}s '
               f'({np.mean(gpu_timing["total"])*1000:.0f} ms/sample avg)')
-        del gpu_reco; gc.collect()
+        del gpu_reco, gpu_solver; gc.collect()
     except MemoryError:
         print('  GPU benchmark skipped (insufficient memory for both '
               'CPU + GPU precomputed matrices in same process)')

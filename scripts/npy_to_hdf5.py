@@ -47,10 +47,22 @@ def load_npy_auto(file_path, expected_single_ndim):
       - If ndim == expected_single_ndim, treat as single sample → add batch dim
       - Otherwise, treat as batch (ndim == expected_single_ndim + 1)
     """
-    arr = np.load(file_path)
+    arr = np.load(file_path, allow_pickle=False)
     if arr.ndim == expected_single_ndim:
         arr = arr[np.newaxis, ...]
     return arr
+
+
+def inspect_npy_auto(file_path, expected_single_ndim):
+    """Inspect .npy shape without fully materializing data."""
+    arr = np.load(file_path, mmap_mode='r', allow_pickle=False)
+    if arr.ndim == expected_single_ndim:
+        batch_len = 1
+        item_shape = arr.shape
+    else:
+        batch_len = arr.shape[0]
+        item_shape = arr.shape[1:]
+    return batch_len, item_shape
 
 
 def append_to_h5(h5_file, key, data, dtype):
@@ -62,10 +74,62 @@ def append_to_h5(h5_file, key, data, dtype):
         ds[old_len:] = data.astype(dtype)
     else:
         item_shape = data.shape[1:]
+        chunk_shape = choose_chunk_shape(item_shape, dtype, data.shape[0])
         h5_file.create_dataset(
             key, data=data.astype(dtype),
             maxshape=(None, *item_shape),
-            chunks=(1, *item_shape))
+            chunks=chunk_shape)
+
+
+def choose_chunk_shape(item_shape, dtype, total_len,
+                       target_chunk_bytes=4 * 1024 * 1024,
+                       max_chunk_samples=64):
+    """Choose a larger chunk size for better sequential write throughput."""
+    sample_bytes = int(np.prod(item_shape)) * np.dtype(dtype).itemsize
+    if sample_bytes <= 0:
+        chunk_samples = 1
+    else:
+        chunk_samples = max(1, target_chunk_bytes // sample_bytes)
+    chunk_samples = min(chunk_samples, max_chunk_samples, max(total_len, 1))
+    return (chunk_samples, *item_shape)
+
+
+def prepare_dataset(h5_file, key, total_count, item_shape, dtype):
+    """Create or resize the dataset once, then return the write start offset."""
+    if key in h5_file:
+        ds = h5_file[key]
+        if ds.shape[1:] != item_shape:
+            raise ValueError(
+                f'Shape mismatch for {key}: existing {ds.shape[1:]}, '
+                f'incoming {item_shape}')
+        old_len = ds.shape[0]
+        ds.resize(old_len + total_count, axis=0)
+        return ds, old_len
+
+    chunk_shape = choose_chunk_shape(item_shape, dtype, total_count)
+    ds = h5_file.create_dataset(
+        key,
+        shape=(total_count, *item_shape),
+        dtype=dtype,
+        maxshape=(None, *item_shape),
+        chunks=chunk_shape,
+    )
+    return ds, 0
+
+
+def flush_buffer(ds, buffer, write_pos, dtype):
+    """Write buffered arrays to HDF5 in one contiguous slice."""
+    if not buffer:
+        return write_pos
+    if len(buffer) == 1:
+        batch = buffer[0]
+    else:
+        batch = np.concatenate(buffer, axis=0)
+    batch = batch.astype(dtype, copy=False)
+    next_pos = write_pos + batch.shape[0]
+    ds[write_pos:next_pos] = batch
+    buffer.clear()
+    return next_pos
 
 
 def convert_npy_dir(input_dir, h5_file, data_type):
@@ -82,13 +146,33 @@ def convert_npy_dir(input_dir, h5_file, data_type):
         print(f'  Skipping {data_type}: no files in {npy_dir}')
         return 0
 
-    count = 0
+    total_count = 0
+    item_shape = None
+    for f in files:
+        batch_len, file_item_shape = inspect_npy_auto(f, single_ndim)
+        total_count += batch_len
+        if item_shape is None:
+            item_shape = file_item_shape
+        elif item_shape != file_item_shape:
+            raise ValueError(
+                f'Inconsistent shapes in {npy_dir}: '
+                f'expected {item_shape}, got {file_item_shape} for {f}')
+
+    ds, write_pos = prepare_dataset(h5_file, h5_key, total_count, item_shape, dtype)
+    buffer = []
+    buffered_samples = 0
+    write_batch_size = max(1, ds.chunks[0]) if ds.chunks else 32
+
     for f in tqdm(files, desc=f'  {data_type}'):
         batch = load_npy_auto(f, single_ndim)
-        append_to_h5(h5_file, h5_key, batch, dtype)
-        count += batch.shape[0]
+        buffer.append(batch)
+        buffered_samples += batch.shape[0]
+        if buffered_samples >= write_batch_size:
+            write_pos = flush_buffer(ds, buffer, write_pos, dtype)
+            buffered_samples = 0
 
-    return count
+    write_pos = flush_buffer(ds, buffer, write_pos, dtype)
+    return total_count
 
 
 def convert_npz_dir(input_dir, h5_file):

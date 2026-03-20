@@ -49,3 +49,5 @@ python scripts/npy_to_hdf5.py --input-dir dataset/level_1 --output dataset/level
 
 python scripts/data_scaling_experiment.py --train-sizes 100 --batch-size 8 --max-iters 1 --hdf5-path dataset/level_1/data.h5
 
+python scripts/generate_data.py --num-images 0 --workers 8 --output-dir ../drive/MyDrive/dataset --start-idx 0 --measurements-only
+

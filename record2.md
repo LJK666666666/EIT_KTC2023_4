@@ -77,3 +77,47 @@ Overall speedup: 6.4x
        vs serial CPU: 0.0x throughput gain
      Active optimizations: A, B, C, D, E, F, G, H
      Results saved to: results\gpu_benchmark_5.json
+
+python scripts/benchmark_data_gen.py --num-samples 40 --workers 4
+GPU: NVIDIA GeForce RTX 5070 Ti Laptop GPU
+Benchmark: 40 samples, level 1, mode=full
+
+Running CPU benchmark...
+  CPU total: 6.8s (117 ms/sample avg)
+Running GPU benchmark...
+  GPU total: 6.3s (95 ms/sample avg)
+
+-----------------------------------------
+      Step   CPU (ms)   GPU (ms)  Speedup
+-----------------------------------------
+   phantom        2.0        2.4     0.9x
+   forward       86.2       87.4     1.0x
+     noise        0.1        0.2     0.8x
+      reco       27.2        3.1     8.8x
+    interp        0.8        0.6     1.3x
+     total      117.4       94.7     1.2x
+-----------------------------------------
+
+Overall speedup: 1.2x
+
+Running multiprocess benchmark (4 workers, 40 samples total)...
+  Wall time: 44.4s (1109 ms/sample throughput)
+  vs serial CPU: 0.1x throughput gain
+Active optimizations: A, B, C, D, E, F, G, H, K3
+Results saved to: results\gpu_benchmark_8.json
+
+
+
+  ⎿  RHS rank: 15  (basis (14899, 15), full (14899, 76))
+     Solver backend: pypardiso
+
+     Samples: 20
+                              mean      std      min      max
+     --------------------------------------------------------
+     76-col solve (ms)       107.6      9.8     92.5    129.1
+     15-col solve (ms)        25.5      1.2     23.2     28.3
+     --------------------------------------------------------
+     Speedup: 4.22x
+     Relative error: 1.37e-11
+
+

@@ -203,3 +203,79 @@ python scripts/analyze_early_stopping.py --truncate results/fcunet_scaling_n100_
 # 自定义 patience
 python scripts/analyze_early_stopping.py --patience 10 --truncate results/fcunet_scaling_n100_4
 
+
+
+• 这里的 SSIM 实现就在 /D:/010_CodePrograms/E/EIT_KTC2023_4/src/evaluation/scoring.py。
+                                                                                                                                              
+  evaluate_all.py 用的是 官方版 scoring_function()，不是训练时的快速版。流程是：                                                              
+                                                                                                                                              
+  1. 先把 3 类分割图拆成两张二值图                                                                                                            
+     在 /D:/010_CodePrograms/E/EIT_KTC2023_4/src/evaluation/scoring.py:189 里：                                                               
+                                                                                                                                              
+  - class 2 一张 mask                                                                                                                         
+  - class 1 一张 mask                                                                                                                         
+                                                                                                                                              
+  也就是：                                                                                                                                    
+                                                                                                                                              
+  - truth_c / reco_c：值等于 2 的位置记为 1，其余为 0                                                                                         
+  - truth_d / reco_d：值等于 1 的位置记为 1，其余为 0                                                                                         
+                                                                                                                                              
+  2. 分别对这两张二值图调用 _ssim_official()                                                                                                  
+     位置在 /D:/010_CodePrograms/E/EIT_KTC2023_4/src/evaluation/scoring.py:140                                                                
+                                                                                                                                              
+  这个函数里具体做了：                                                                                                                        
+                                                                                                                                              
+  - 常数：                                                                                                                                    
+      - c1 = 1e-4                                                                                                                             
+      - c2 = 9e-4                                                                                                                             
+      - r = 80                                                                                                                                
+  - 构造一个很大的二维高斯核                                                                                                                  
+    见 /D:/010_CodePrograms/E/EIT_KTC2023_4/src/evaluation/scoring.py:154                                                                     
+      - 窗口半径参数 r=80                                                                                                                     
+      - 实际卷积核边长是 321 x 321                                                                                                            
+  - 用 scipy.signal.convolve2d 计算局部均值                                                                                                   
+      - gt：truth 的局部均值                                                                                                                  
+      - gr：reco 的局部均值                                                                                                                   
+  - 再计算局部方差和协方差                                                                                                                    
+      - sigma_t2                                                                                                                              
+      - sigma_r2                                                                                                                              
+      - sigma_tr                                                                                                                              
+  - 然后按 SSIM 标准公式逐像素得到 ssimimage：                                                                                                
+    [                                                                                                                                         
+    \text{SSIM}=\frac{(2\mu_t\mu_r+c_1)(2\sigma_{tr}+c_2)}                                                                                    
+    {(\mu_t^2+\mu_r^2+c_1)(\sigma_t^2+\sigma_r^2+c_2)}                                                                                        
+    ]                                                                                                                                         
+                                                                                                                                              
+  对应代码在：                                                                                                                                
+                                                                                                                                              
+  - /D:/010_CodePrograms/E/EIT_KTC2023_4/src/evaluation/scoring.py:181                                                                        
+  - 最后对整张 ssimimage 取平均，得到这一类的分数                                                                                             
+    见 /D:/010_CodePrograms/E/EIT_KTC2023_4/src/evaluation/scoring.py:185                                                                     
+                                                                                                                                              
+  3. 两类再取平均                                                                                                                             
+     在 /D:/010_CodePrograms/E/EIT_KTC2023_4/src/evaluation/scoring.py:217 和 /D:/010_CodePrograms/E/EIT_KTC2023_4/src/evaluation/            
+     scoring.py:224 分别算出：                                                                                                                
+                                                                                                                                              
+  - score_c                                                                                                                                   
+  - score_d                                                                                                                                   
+                                                                                                                                              
+  最后：                                                                                                                                      
+                                                                                                                                              
+  - score = 0.5 * (score_c + score_d)                                                                                                         
+    见 /D:/010_CodePrograms/E/EIT_KTC2023_4/src/evaluation/scoring.py:226                                                                     
+                                                                                                                                              
+  所以这里的 SSIM 不是直接对原始 0/1/2 标签图整体计算，而是：                                                                                 
+                                                                                                                                              
+  - 先转成两张二值 mask                                                                                                                       
+  - 各算一次官方 SSIM                                                                                                                         
+  - 最后平均                                                                                                                                  
+                                                                                                                                              
+  另外还有一个 FastScoringFunction()，位置在 /D:/010_CodePrograms/E/EIT_KTC2023_4/src/evaluation/scoring.py:315：                             
+                                                                                                                                              
+  - 指标定义一样                                                                                                                              
+  - 只是把二维卷积换成了可分离一维卷积近似加速                                                                                                
+  - 训练时常用它                                                                                                                              
+  - 正式评估时 evaluate_all.py 用的还是 scoring_function()                                                                                    
+
+• CuPy 的 cupyx.scipy.sparse.linalg 在这台机器上缺 cublasLt*.dll，现成的 GPU CG 路线跑不起来。我不打算卡死在环境问题上，下一步改用这台机器已经可 
+  用的 PyTorch CUDA 稀疏 CSR 来实现同样的 Block PCG，这样还能继续保留 GPU 加速尝试。

@@ -1,0 +1,271 @@
+{
+  "config": {
+    "num_samples": 5,
+    "level": 1,
+    "ref_path": "KTC2023/Codes_Python/TrainingData/ref.mat",
+    "mesh_name": "Mesh_dense.mat",
+    "seed": 42,
+    "pcg_iters": [
+      775,
+      800
+    ],
+    "rhs_basis_mode": "svd",
+    "gpu_backends": [
+      "torch"
+    ],
+    "target_rel_error": 0.01,
+    "device": "cuda",
+    "warmup_iters": 50
+  },
+  "environment": {
+    "gpu_name": "NVIDIA GeForce RTX 5070 Ti Laptop GPU",
+    "torch_version": "2.7.0+cu128",
+    "pardiso": true,
+    "cupy_backend": {
+      "available": false
+    }
+  },
+  "static_info": {
+    "rhs_full_shape": [
+      14899,
+      76
+    ],
+    "rhs_reduced_rank": 15,
+    "basis_info": {
+      "basis_cols": null,
+      "singular_values": [
+        37.79465575769221,
+        6.938341813952133,
+        6.882843744372797,
+        6.443490568526467,
+        4.004935189656291,
+        3.9833554550255372,
+        3.9417868555419537,
+        3.906024102515416,
+        3.631465042585647,
+        3.6182235164832055,
+        3.560027761439022,
+        3.5279842577437353,
+        3.1476365144128167,
+        3.11591534575294,
+        3.0862809449498525
+      ]
+    },
+    "matrix_shape": [
+      14899,
+      14899
+    ],
+    "matrix_nnz": 171005
+  },
+  "summary": {
+    "current_cpu_direct": {
+      "num_samples": 5,
+      "mean_total_ms": 216.67943000793457,
+      "mean_rel_error": 0.0,
+      "max_rel_error": 0.0,
+      "mean_max_abs_error": 0.0,
+      "speedup_vs_current": 1.0
+    },
+    "cpu_direct_reduced_exact": {
+      "num_samples": 5,
+      "mean_total_ms": 45.75614929199219,
+      "mean_rel_error": 1.320054748584218e-11,
+      "max_rel_error": 1.3767298588727709e-11,
+      "mean_max_abs_error": 2.927762476900853e-11,
+      "speedup_vs_current": 4.735525898938698
+    },
+    "gpu_torch_batched_pcg_iter775": {
+      "num_samples": 5,
+      "mean_total_ms": 295.37014961242676,
+      "mean_rel_error": 0.005619956587436496,
+      "max_rel_error": 0.008550627661468349,
+      "mean_max_abs_error": 0.0113179444653568,
+      "speedup_vs_current": 0.7335860793389343
+    },
+    "gpu_torch_batched_pcg_iter800": {
+      "num_samples": 5,
+      "mean_total_ms": 273.4316349029541,
+      "mean_rel_error": 0.005026506094800086,
+      "max_rel_error": 0.00847532605122828,
+      "mean_max_abs_error": 0.010749363802193924,
+      "speedup_vs_current": 0.7924446272825676
+    }
+  },
+  "per_sample_records": {
+    "current_cpu_direct": [
+      {
+        "assembly_ms": 7.561445236206055,
+        "solve_ms": 213.58227729797363,
+        "post_ms": 0.0,
+        "total_ms": 221.1437225341797,
+        "rel_error": 0.0,
+        "max_abs_error": 0.0
+      },
+      {
+        "assembly_ms": 7.731914520263672,
+        "solve_ms": 201.05767250061035,
+        "post_ms": 0.0,
+        "total_ms": 208.78958702087402,
+        "rel_error": 0.0,
+        "max_abs_error": 0.0
+      },
+      {
+        "assembly_ms": 8.853435516357422,
+        "solve_ms": 213.39774131774902,
+        "post_ms": 0.0,
+        "total_ms": 222.25117683410645,
+        "rel_error": 0.0,
+        "max_abs_error": 0.0
+      },
+      {
+        "assembly_ms": 7.37762451171875,
+        "solve_ms": 216.88508987426758,
+        "post_ms": 0.0,
+        "total_ms": 224.26271438598633,
+        "rel_error": 0.0,
+        "max_abs_error": 0.0
+      },
+      {
+        "assembly_ms": 7.661581039428711,
+        "solve_ms": 199.28836822509766,
+        "post_ms": 0.0,
+        "total_ms": 206.94994926452637,
+        "rel_error": 0.0,
+        "max_abs_error": 0.0
+      }
+    ],
+    "cpu_direct_reduced_exact": [
+      {
+        "assembly_ms": 7.561445236206055,
+        "solve_ms": 37.77170181274414,
+        "post_ms": 0.0,
+        "total_ms": 45.333147048950195,
+        "rel_error": 1.2069602387146219e-11,
+        "max_abs_error": 2.6474045178304095e-11
+      },
+      {
+        "assembly_ms": 7.731914520263672,
+        "solve_ms": 33.94508361816406,
+        "post_ms": 0.0,
+        "total_ms": 41.676998138427734,
+        "rel_error": 1.3359566453540011e-11,
+        "max_abs_error": 2.701405765748177e-11
+      },
+      {
+        "assembly_ms": 8.853435516357422,
+        "solve_ms": 37.08481788635254,
+        "post_ms": 0.0,
+        "total_ms": 45.93825340270996,
+        "rel_error": 1.3466502315489666e-11,
+        "max_abs_error": 3.449962537871443e-11
+      },
+      {
+        "assembly_ms": 7.37762451171875,
+        "solve_ms": 35.51220893859863,
+        "post_ms": 0.0,
+        "total_ms": 42.88983345031738,
+        "rel_error": 1.3339767684307291e-11,
+        "max_abs_error": 3.201594545032549e-11
+      },
+      {
+        "assembly_ms": 7.661581039428711,
+        "solve_ms": 45.28093338012695,
+        "post_ms": 0.0,
+        "total_ms": 52.942514419555664,
+        "rel_error": 1.3767298588727709e-11,
+        "max_abs_error": 2.6384450180216845e-11
+      }
+    ],
+    "gpu_torch_batched_pcg_iter775": [
+      {
+        "assembly_ms": 7.561445236206055,
+        "solve_ms": 281.3742160797119,
+        "post_ms": 0.0,
+        "total_ms": 288.93566131591797,
+        "rel_error": 0.008550627661468349,
+        "max_abs_error": 0.01635551099584126
+      },
+      {
+        "assembly_ms": 7.731914520263672,
+        "solve_ms": 274.62220191955566,
+        "post_ms": 0.0,
+        "total_ms": 282.35411643981934,
+        "rel_error": 0.008282558516977016,
+        "max_abs_error": 0.015965246786772636
+      },
+      {
+        "assembly_ms": 8.853435516357422,
+        "solve_ms": 262.7906799316406,
+        "post_ms": 0.0,
+        "total_ms": 271.64411544799805,
+        "rel_error": 0.0024075048995253864,
+        "max_abs_error": 0.005329166499261628
+      },
+      {
+        "assembly_ms": 7.37762451171875,
+        "solve_ms": 289.6385192871094,
+        "post_ms": 0.0,
+        "total_ms": 297.0161437988281,
+        "rel_error": 0.002089454524399548,
+        "max_abs_error": 0.004942595852313991
+      },
+      {
+        "assembly_ms": 7.661581039428711,
+        "solve_ms": 328.1211853027344,
+        "post_ms": 1.1179447174072266,
+        "total_ms": 336.9007110595703,
+        "rel_error": 0.006769637334812184,
+        "max_abs_error": 0.013997202192594482
+      }
+    ],
+    "gpu_torch_batched_pcg_iter800": [
+      {
+        "assembly_ms": 7.561445236206055,
+        "solve_ms": 251.72805786132812,
+        "post_ms": 0.0,
+        "total_ms": 259.2895030975342,
+        "rel_error": 0.005074595861554147,
+        "max_abs_error": 0.008484401650602269
+      },
+      {
+        "assembly_ms": 7.731914520263672,
+        "solve_ms": 250.37312507629395,
+        "post_ms": 0.0,
+        "total_ms": 258.1050395965576,
+        "rel_error": 0.00847532605122828,
+        "max_abs_error": 0.016595865998326242
+      },
+      {
+        "assembly_ms": 8.853435516357422,
+        "solve_ms": 252.08163261413574,
+        "post_ms": 0.0,
+        "total_ms": 260.93506813049316,
+        "rel_error": 0.0024123736662459033,
+        "max_abs_error": 0.005376198291027756
+      },
+      {
+        "assembly_ms": 7.37762451171875,
+        "solve_ms": 280.1806926727295,
+        "post_ms": 0.0,
+        "total_ms": 287.55831718444824,
+        "rel_error": 0.002097242628614855,
+        "max_abs_error": 0.004911214423765964
+      },
+      {
+        "assembly_ms": 7.661581039428711,
+        "solve_ms": 293.6086654663086,
+        "post_ms": 0.0,
+        "total_ms": 301.2702465057373,
+        "rel_error": 0.007072992266357249,
+        "max_abs_error": 0.018379138647247384
+      }
+    ]
+  },
+  "recommendation": {
+    "target_rel_error": 0.01,
+    "recommended_mode": "cpu_direct_reduced_exact",
+    "mean_total_ms": 45.75614929199219,
+    "mean_rel_error": 1.320054748584218e-11,
+    "speedup_vs_current": 4.735525898938698
+  }
+}

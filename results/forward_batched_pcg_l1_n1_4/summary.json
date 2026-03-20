@@ -1,0 +1,159 @@
+{
+  "config": {
+    "num_samples": 1,
+    "level": 1,
+    "ref_path": "KTC2023/Codes_Python/TrainingData/ref.mat",
+    "mesh_name": "Mesh_dense.mat",
+    "seed": 42,
+    "pcg_iters": [
+      200,
+      600,
+      1000
+    ],
+    "gpu_backends": [
+      "cupy"
+    ],
+    "target_rel_error": 0.01,
+    "device": "cuda",
+    "warmup_iters": 50
+  },
+  "environment": {
+    "gpu_name": "NVIDIA GeForce RTX 5070 Ti Laptop GPU",
+    "torch_version": "2.7.0+cu128",
+    "pardiso": true,
+    "cupy_backend": {
+      "available": true,
+      "cupy_version": "14.0.1"
+    }
+  },
+  "static_info": {
+    "rhs_full_shape": [
+      14899,
+      76
+    ],
+    "rhs_reduced_rank": 15,
+    "basis_cols": [
+      19,
+      60,
+      4,
+      1,
+      64,
+      13,
+      10,
+      6,
+      9,
+      50,
+      62,
+      5,
+      12,
+      11,
+      65
+    ],
+    "matrix_shape": [
+      14899,
+      14899
+    ],
+    "matrix_nnz": 171005
+  },
+  "summary": {
+    "current_cpu_direct": {
+      "num_samples": 1,
+      "mean_total_ms": 186.9800090789795,
+      "mean_rel_error": 0.0,
+      "max_rel_error": 0.0,
+      "mean_max_abs_error": 0.0,
+      "speedup_vs_current": 1.0
+    },
+    "cpu_direct_reduced_exact": {
+      "num_samples": 1,
+      "mean_total_ms": 34.8508358001709,
+      "mean_rel_error": 1.3910788817901016e-11,
+      "max_rel_error": 1.3910788817901016e-11,
+      "mean_max_abs_error": 3.057032404996107e-11,
+      "speedup_vs_current": 5.365151359671627
+    },
+    "gpu_cupy_batched_pcg_iter200": {
+      "num_samples": 1,
+      "mean_total_ms": 113.50774765014648,
+      "mean_rel_error": 0.07946071437385803,
+      "max_rel_error": 0.07946071437385803,
+      "mean_max_abs_error": 0.18575984202203588,
+      "speedup_vs_current": 1.647288515100213
+    },
+    "gpu_cupy_batched_pcg_iter600": {
+      "num_samples": 1,
+      "mean_total_ms": 286.07749938964844,
+      "mean_rel_error": 0.018478334587349647,
+      "max_rel_error": 0.018478334587349647,
+      "mean_max_abs_error": 0.04385946759402115,
+      "speedup_vs_current": 0.6535991452592558
+    },
+    "gpu_cupy_batched_pcg_iter1000": {
+      "num_samples": 1,
+      "mean_total_ms": 475.7692813873291,
+      "mean_rel_error": 0.0012428089419648017,
+      "max_rel_error": 0.0012428089419648017,
+      "mean_max_abs_error": 0.002665106192378419,
+      "speedup_vs_current": 0.39300563612209544
+    }
+  },
+  "per_sample_records": {
+    "current_cpu_direct": [
+      {
+        "assembly_ms": 8.810281753540039,
+        "solve_ms": 178.16972732543945,
+        "post_ms": 0.0,
+        "total_ms": 186.9800090789795,
+        "rel_error": 0.0,
+        "max_abs_error": 0.0
+      }
+    ],
+    "cpu_direct_reduced_exact": [
+      {
+        "assembly_ms": 8.810281753540039,
+        "solve_ms": 26.04055404663086,
+        "post_ms": 0.0,
+        "total_ms": 34.8508358001709,
+        "rel_error": 1.3910788817901016e-11,
+        "max_abs_error": 3.057032404996107e-11
+      }
+    ],
+    "gpu_cupy_batched_pcg_iter200": [
+      {
+        "assembly_ms": 8.810281753540039,
+        "solve_ms": 104.69746589660645,
+        "post_ms": 0.0,
+        "total_ms": 113.50774765014648,
+        "rel_error": 0.07946071437385803,
+        "max_abs_error": 0.18575984202203588
+      }
+    ],
+    "gpu_cupy_batched_pcg_iter600": [
+      {
+        "assembly_ms": 8.810281753540039,
+        "solve_ms": 277.2672176361084,
+        "post_ms": 0.0,
+        "total_ms": 286.07749938964844,
+        "rel_error": 0.018478334587349647,
+        "max_abs_error": 0.04385946759402115
+      }
+    ],
+    "gpu_cupy_batched_pcg_iter1000": [
+      {
+        "assembly_ms": 8.810281753540039,
+        "solve_ms": 466.95899963378906,
+        "post_ms": 0.0,
+        "total_ms": 475.7692813873291,
+        "rel_error": 0.0012428089419648017,
+        "max_abs_error": 0.002665106192378419
+      }
+    ]
+  },
+  "recommendation": {
+    "target_rel_error": 0.01,
+    "recommended_mode": "cpu_direct_reduced_exact",
+    "mean_total_ms": 34.8508358001709,
+    "mean_rel_error": 1.3910788817901016e-11,
+    "speedup_vs_current": 5.365151359671627
+  }
+}

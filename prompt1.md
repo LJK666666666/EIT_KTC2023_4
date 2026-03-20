@@ -23,3 +23,13 @@
 
 =写入云盘的通信瓶颈
 
+
+请尝试根据 @GUIDE\data_generation_optimization.md 中**K. GPU 预处理共轭梯度法（CG）替代 CPU 直接求解**的思路，对 @scripts\generate_data.py 中的forward步骤进行Batched PCG加速。先不要对原脚本进行修改，创建一个新脚本进行尝试，将优化后效果和当前效果进行对比，并不断进行优化尝试，直到效果符合预期为止。
+
+
+转存机制
+
+gm_reco中的文件内容是什么？为什么比gt和measurements大这么多？
+
+@scripts\npy_to_hdf5.py 是如何将.npy文件写入.h5文件的？它是直接将.npy文件接在.h5已有最大索引的最后面吗？还是会按照文件名写入对应索引？
+

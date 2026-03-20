@@ -66,20 +66,27 @@ class FCUNetPipeline(BasePipeline):
         self._model_loaded = True
 
     def reconstruct(self, Uel: np.ndarray, ref_data: dict, level: int) -> np.ndarray:
+        return self.reconstruct_batch([Uel], ref_data, level)[0]
+
+    def reconstruct_batch(self, Uels, ref_data: dict, level: int):
+        """Batch reconstruction for identical results with lower overhead."""
         Injref = ref_data['Injref']
         Uelref = ref_data['Uelref']
 
         vincl = self.create_vincl(level, Injref).T.flatten()
+        y_batch = []
+        for Uel in Uels:
+            y = np.array(Uel) - np.array(Uelref)
+            y[~vincl] = 0
+            y_batch.append(np.asarray(y).reshape(-1))
 
-        y = np.array(Uel) - np.array(Uelref)
-        y[~vincl] = 0
-
-        y_tensor = torch.from_numpy(y).float().to(self.device).T  # (1, 2356)
-        level_tensor = torch.tensor([level]).to(self.device)
+        y_tensor = torch.from_numpy(np.stack(y_batch)).float().to(self.device)
+        level_tensor = torch.full(
+            (y_tensor.shape[0],), level, device=self.device)
 
         with torch.no_grad():
             pred = self.model(y_tensor, level_tensor)
             pred_softmax = F.softmax(pred, dim=1)
-            pred_argmax = torch.argmax(pred_softmax, dim=1).cpu().numpy()[0, :, :]
+            pred_argmax = torch.argmax(pred_softmax, dim=1).cpu().numpy()
 
-        return pred_argmax.astype(int)
+        return [arr.astype(int) for arr in pred_argmax]

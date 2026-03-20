@@ -97,6 +97,15 @@ class EITFEM:
         self.b = np.concatenate(
             (np.zeros((self.ng2, Inj.shape[1])), self.C.T * Inj), axis=0)
 
+        # Reduced-RHS decomposition: rank(Injref)=15 for current ref.mat,
+        # so self.b has rank 15. Solve 15 basis RHS instead of 76, then
+        # reconstruct via coefficient matrix. Exact (machine-precision).
+        U, s, Vt = np.linalg.svd(np.asarray(self.b), full_matrices=False)
+        rank = int(np.sum(s > s[0] * 1e-12))
+        self._b_basis = U[:, :rank] * s[:rank][None, :]   # (N, rank)
+        self._b_coeff = Vt[:rank, :]              # (rank, 76)
+        self._b_rank = rank
+
         # QC and MpatC (constant: depends only on Mpat, C)
         if Mpat is not None:
             self.QC = np.block([
@@ -187,11 +196,12 @@ class EITFEM:
 
         self.A = A0 + self._S0_cached
 
-        # === Solve ===
+        # === Solve (reduced-RHS: 15 basis columns instead of 76) ===
         if _HAS_PARDISO:
-            UU = pardiso_spsolve(self.A, self.b)
+            UU_basis = pardiso_spsolve(self.A, self._b_basis)
         else:
-            UU = sp.sparse.linalg.spsolve(self.A, self.b)
+            UU_basis = sp.sparse.linalg.spsolve(self.A, self._b_basis)
+        UU = UU_basis @ self._b_coeff
         self.theta = UU
         self.Pot = UU[0:self.ng2, :]
         self.Imeas = self.Inj

@@ -303,12 +303,19 @@ def run_test_only(n_train, args, summary_config, split):
 
 
 def plot_scaling_results(all_results, save_dir='results'):
-    """Generate the data scaling comparison plot."""
+    """Generate the data scaling comparison plots."""
     sizes = [r['n_train'] for r in all_results]
     scores = [r.get('test_score', 0) for r in all_results]
     losses = [r.get('test_loss', 0) for r in all_results]
+    challenge_scores = [r.get('challenge_score') for r in all_results]
+    has_challenge = any(v is not None for v in challenge_scores)
 
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+    fig, axes = plt.subplots(1, 3 if has_challenge else 2,
+                             figsize=(18 if has_challenge else 12, 5))
+    if has_challenge:
+        ax1, ax2, ax3 = axes
+    else:
+        ax1, ax2 = axes
 
     # Left: Test Score vs Data Size
     ax1.plot(sizes, scores, 'o-', linewidth=2, markersize=8, color='#2196F3')
@@ -334,11 +341,79 @@ def plot_scaling_results(all_results, save_dir='results'):
     ax2.set_ylabel('Test CE Loss', fontsize=11)
     ax2.grid(True, alpha=0.3)
 
+    if has_challenge:
+        challenge_plot = [
+            np.nan if v is None else v for v in challenge_scores
+        ]
+        ax3.plot(
+            sizes, challenge_plot, 'o-',
+            linewidth=2, markersize=8, color='#4CAF50')
+        for x, y in zip(sizes, challenge_plot):
+            if np.isnan(y):
+                continue
+            ax3.annotate(f'{y:.4f}', (x, y), textcoords='offset points',
+                         xytext=(0, 10), ha='center', fontsize=9)
+        ax3.set_xscale('log', base=2)
+        ax3.set_xticks(sizes)
+        ax3.set_xticklabels([str(s) for s in sizes])
+        ax3.set_xlabel('Training Data Size', fontsize=11)
+        ax3.set_ylabel('Challenge Score', fontsize=11)
+        ax3.grid(True, alpha=0.3)
+
     fig.tight_layout()
     path = os.path.join(save_dir, 'data_scaling_comparison.png')
     fig.savefig(path, dpi=150, bbox_inches='tight')
     plt.close(fig)
     print(f'Scaling comparison plot saved to: {path}')
+
+    # Linear-x version with true spacing between training sizes
+    fig, axes = plt.subplots(1, 3 if has_challenge else 2,
+                             figsize=(18 if has_challenge else 12, 5))
+    if has_challenge:
+        ax1, ax2, ax3 = axes
+    else:
+        ax1, ax2 = axes
+
+    ax1.plot(sizes, scores, 'o-', linewidth=2, markersize=8, color='#2196F3')
+    for x, y in zip(sizes, scores):
+        ax1.annotate(f'{y:.4f}', (x, y), textcoords='offset points',
+                     xytext=(0, 10), ha='center', fontsize=9)
+    ax1.set_xticks(sizes)
+    ax1.set_xlabel('Training Data Size', fontsize=11)
+    ax1.set_ylabel('Test Score (SSIM)', fontsize=11)
+    ax1.grid(True, alpha=0.3)
+
+    ax2.plot(sizes, losses, 'o-', linewidth=2, markersize=8, color='#F44336')
+    for x, y in zip(sizes, losses):
+        ax2.annotate(f'{y:.4f}', (x, y), textcoords='offset points',
+                     xytext=(0, 10), ha='center', fontsize=9)
+    ax2.set_xticks(sizes)
+    ax2.set_xlabel('Training Data Size', fontsize=11)
+    ax2.set_ylabel('Test CE Loss', fontsize=11)
+    ax2.grid(True, alpha=0.3)
+
+    if has_challenge:
+        challenge_plot = [
+            np.nan if v is None else v for v in challenge_scores
+        ]
+        ax3.plot(
+            sizes, challenge_plot, 'o-',
+            linewidth=2, markersize=8, color='#4CAF50')
+        for x, y in zip(sizes, challenge_plot):
+            if np.isnan(y):
+                continue
+            ax3.annotate(f'{y:.4f}', (x, y), textcoords='offset points',
+                         xytext=(0, 10), ha='center', fontsize=9)
+        ax3.set_xticks(sizes)
+        ax3.set_xlabel('Training Data Size', fontsize=11)
+        ax3.set_ylabel('Challenge Score', fontsize=11)
+        ax3.grid(True, alpha=0.3)
+
+    fig.tight_layout()
+    linear_path = os.path.join(save_dir, 'data_scaling_comparison_linear_x.png')
+    fig.savefig(linear_path, dpi=150, bbox_inches='tight')
+    plt.close(fig)
+    print(f'Linear-x scaling comparison plot saved to: {linear_path}')
 
 
 def plot_training_curves(all_results, save_dir='results'):
@@ -443,18 +518,23 @@ def parse_args():
 def main():
     args = parse_args()
     summary_config = load_summary_config(args.summary_config)
-    split = build_data_split(args)
+    split = None
+    if args.mode in {'train', 'test'}:
+        split = build_data_split(args)
 
     print('='*60)
     print('FCUNet Data Scaling Experiment')
     print(f'Train sizes: {args.train_sizes}')
-    print(f'Total available samples: {len(split["all_indices"])}')
-    print(f'Test: {len(split["test_indices"])} samples '
-          f'({split["test_indices"][0]}-{split["test_indices"][-1]})')
-    print(f'Val:  {len(split["val_indices"])} samples '
-          f'({split["val_indices"][0]}-{split["val_indices"][-1]})')
-    print(f'Train pool: {len(split["train_pool"])} samples '
-          f'({split["train_pool"][0]}-{split["train_pool"][-1]})')
+    if split is not None:
+        print(f'Total available samples: {len(split["all_indices"])}')
+        print(f'Test: {len(split["test_indices"])} samples '
+              f'({split["test_indices"][0]}-{split["test_indices"][-1]})')
+        print(f'Val:  {len(split["val_indices"])} samples '
+              f'({split["val_indices"][0]}-{split["val_indices"][-1]})')
+        print(f'Train pool: {len(split["train_pool"])} samples '
+              f'({split["train_pool"][0]}-{split["train_pool"][-1]})')
+    else:
+        print('Postprocess mode: local dataset scan skipped')
     print(f'Seed: {args.seed}')
     print(f'Mode: {args.mode}')
     print(f'Summary config: {args.summary_config}')

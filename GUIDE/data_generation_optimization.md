@@ -40,7 +40,18 @@ EIT 仿真数据生成的每个样本包含两个计算密集步骤：
 | interp | 73ms | **1.2ms** | **0.9ms** | **61x** |
 | **total** | **458ms** | **250ms** | **198ms** | **1.8x / 2.3x** |
 
-pypardiso（Intel PARDISO）替代 scipy SuperLU，forward 加速 1.6x；插值权重矩阵预计算使 interp 从 73ms 降至 1.2ms（61x）。**累计：原始 23210ms → 现在 198ms = 117x 总加速。**
+pypardiso（Intel PARDISO）替代 scipy SuperLU，forward 加速 1.6x；插值权重矩阵预计算使 interp 从 73ms 降至 1.2ms（61x）。
+
+**第四轮优化 [K3]**（降秩精确直解 76→15 RHS）— `results/gpu_benchmark_8.json`：
+
+| | 无 K3 (76 RHS) | 有 K3 (15 RHS) | 加速比 |
+|--|--|--|--|
+| CPU forward | 214ms | **86ms** | **2.5x** |
+| CPU total | 250ms | **117ms** | **2.1x** |
+| GPU forward | 183ms | **87ms** | **2.1x** |
+| GPU total | 198ms | **95ms** | **2.1x** |
+
+`Injref` 的 76 列激励仅张成 15 维子空间（数学证明见 `GUIDE/injref_rank15_proof.md`，实验验证见 `GUIDE/forward_batched_pcg_optimization.md`）。SVD 分解后只解 15 列 RHS 再线性重构，精度为机器精度（相对误差 6.8e-11）。**累计（pypardiso CPU）：原始 23210ms → 现在 117ms = ~198x 总加速。**
 
 ---
 
@@ -195,6 +206,37 @@ delta_sigma = R @ deltaU              # 一次矩阵-向量乘
 
 ---
 
+### [K3] SolveForward：降秩精确直解（76→15 RHS）
+
+**文件**：`src/ktc_methods/KTCFwd.py`
+
+**关键发现**：当前 `ref.mat` 中的 76 个电流激励 `Injref` 仅张成 15 维子空间（rank=15）。这是因为只有 16 个偶数编号电极参与注流且满足电流守恒（16-1=15）。完整数学证明见 `GUIDE/injref_rank15_proof.md`。
+
+**优化原理**：对 RHS 矩阵 `self.b` 做 SVD 分解，提取 15 个基列 `B_basis` 和系数矩阵 `C`，使得 `B_full = B_basis @ C`。求解时只解 15 列，再通过矩阵乘法重构完整 76 列解。这是精确变换，不引入任何近似误差。
+
+```python
+# __init__ 中（仅执行一次）：
+U, s, Vt = np.linalg.svd(self.b, full_matrices=False)
+rank = int(np.sum(s > s[0] * 1e-12))  # = 15
+self._b_basis = U[:, :rank] * s[:rank]   # (14899, 15)
+self._b_coeff = Vt[:rank, :]              # (15, 76)
+
+# SolveForward 中：
+UU_basis = spsolve(self.A, self._b_basis)  # 解 15 列（原先 76 列）
+UU = UU_basis @ self._b_coeff              # 线性重构回 76 列
+```
+
+**精度验证**：
+- RHS 重构相对误差：7.8e-15（机器精度）
+- 测量电压 Uel 与原方法完全一致
+
+**实测效果**（40 样本 benchmark，pypardiso 环境）：
+- CPU forward：214ms → **86ms** = **2.5x 加速**
+- GPU forward：183ms → **87ms** = **2.1x 加速**
+- CPU total：250ms → **117ms** = **2.1x 加速**
+
+---
+
 ### [I] CPU 多进程流水线
 
 **文件**：`scripts/generate_data.py`
@@ -281,7 +323,7 @@ def interpolate_to_image(self, sigma):
 
 | 文件 | 修改内容 |
 |------|----------|
-| `src/ktc_methods/KTCFwd.py` | [A] 向量化 A0 组装、[B] COO S0 组装、[C] 预计算缓存、[K2] pypardiso |
+| `src/ktc_methods/KTCFwd.py` | [A] 向量化 A0 组装、[B] COO S0 组装、[C] 预计算缓存、[K2] pypardiso、[K3] 降秩直解 |
 | `src/reconstruction/linearised_reco.py` | [D] 对角优化、[E] CuPy GPU、[F] Delaunay 缓存、[H] 投影矩阵预计算、[F2] 插值权重矩阵 |
 | `scripts/generate_data.py` | `--gpu`/`--hdf5`/`--workers` 参数、[I] 多进程、[J] HDF5 |
 | `scripts/benchmark_data_gen.py` | CPU vs GPU 基准测试（自动编号、优化项追踪） |
@@ -292,31 +334,9 @@ def interpolate_to_image(self, sigma):
 
 ### 高收益
 
-**K. GPU 预处理共轭梯度法（CG）替代 CPU 直接求解**
+**K. GPU 预处理共轭梯度法（CG）替代 CPU 直接求解**（已被 [K3] 降秩直解取代）
 
-当前 forward 求解使用 CPU 上的 `scipy.sparse.linalg.spsolve`（~334ms），瓶颈在于 CPU 稀疏 LU 分解。EIT 刚度矩阵是对称正定（SPD）的，可使用 GPU 上的预处理共轭梯度法（PCG）：
-
-```python
-import cupyx.scipy.sparse as csparse
-import cupyx.scipy.sparse.linalg as cslinalg
-
-A_gpu = csparse.csr_matrix(self.A)
-
-# Jacobi 预处理器（对角线元素的倒数）
-M_diag = 1.0 / A_gpu.diagonal()
-M = csparse.diags(M_diag)
-
-# 逐列求解 76 个 RHS
-for col in range(76):
-    x, info = cslinalg.cg(A_gpu, b_gpu[:, col], M=M, tol=1e-10)
-    UU[:, col] = x
-```
-
-CG 不需要多列 RHS 支持（绕过了 CuPy `spsolve` 的限制），且在 GPU 上保持稀疏性。配合简单的 Jacobi 预处理器，收敛速度极快。
-
-**预期收益**：forward 从 334ms 进一步压缩，且全流程可留在 GPU 上减少数据搬运。
-
-**学术依据**：EIT 领域的 GPU 加速论文普遍使用 PCG 而非直接求解器处理稀疏 SPD 系统。
+经 `GUIDE/forward_batched_pcg_optimization.md` 中的实验验证，GPU Jacobi-PCG 在当前环境下无法同时达到高精度和高速度。降秩精确直解 [K3] 以更简单的方式获得了更大的加速（3.7x），且零误差、零 GPU 依赖。
 
 ---
 
