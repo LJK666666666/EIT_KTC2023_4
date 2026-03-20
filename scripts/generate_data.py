@@ -58,7 +58,8 @@ def generate_data(level, num_images, output_dir='dataset',
                   measurements_only=False,
                   start_idx=0,
                   use_gpu=False,
-                  use_hdf5=False):
+                  use_hdf5=False,
+                  sys_bias=None):
     """Generate training data for a single level.
 
     Args:
@@ -119,7 +120,7 @@ def generate_data(level, num_images, output_dir='dataset',
     # Simulate reference measurements
     # Note: SolveForward may return numpy.matrix (2D) due to scipy sparse ops.
     # Ensure consistent (N, 1) column vector shape to avoid broadcasting issues.
-    sigma_bg = np.ones((mesh.g.shape[0], 1)) * 0.745
+    sigma_bg = np.ones((mesh.g.shape[0], 1)) * 0.804
     Uelref = np.asarray(solver.SolveForward(sigma_bg, z)).reshape(-1, 1)
     noise = np.asarray(
         solver.InvLn * np.random.randn(Uelref.shape[0], 1)).reshape(-1, 1)
@@ -176,9 +177,9 @@ def generate_data(level, num_images, output_dir='dataset',
         gt_name = f'gt_ztm_{idx:06d}.npy'
 
         # Random conductivity values
-        background = 0.745
+        background = 0.804
         resistive = np.random.rand() * 0.1 + 0.025
-        conductive = np.random.rand() + 5.0
+        conductive = np.random.rand() * 2.0 + 4.0
 
         sigma = np.zeros(sigma_pix.shape)
         sigma[sigma_pix == 0.0] = background
@@ -196,6 +197,8 @@ def generate_data(level, num_images, output_dir='dataset',
         noise = np.asarray(
             solver.InvLn * np.random.randn(Uel_sim.shape[0], 1)).reshape(-1, 1)
         Uel_noisy = Uel_sim + noise
+        if sys_bias is not None:
+            Uel_noisy += sys_bias.reshape(-1, 1)
         timing['noise'].append(time.time() - t0)
 
         # Save gt and measurements
@@ -305,6 +308,9 @@ def parse_args():
     parser.add_argument('--hdf5', action='store_true',
                         help='Save to single HDF5 file instead of per-sample '
                              '.npy files (reduces filesystem overhead)')
+    parser.add_argument('--sys-bias', type=str, default=None,
+                        help='Path to systematic bias .npy vector '
+                             '(default: data/systematic_bias.npy if exists)')
     parser.add_argument('--workers', type=int, default=1,
                         help='Number of parallel workers (CPU multiprocess, '
                              'default: 1 = serial)')
@@ -315,13 +321,13 @@ def parse_args():
 
 
 def _generate_one_sample(solver, mesh, z, reconstructor, alphas,
-                         do_meas, do_reco):
+                         do_meas, do_reco, sys_bias=None):
     """Generate one training sample. Returns (gt, measurements_or_None, reco_or_None)."""
     sigma_pix = create_phantoms()
 
-    background = 0.745
+    background = 0.804
     resistive = np.random.rand() * 0.1 + 0.025
-    conductive = np.random.rand() + 5.0
+    conductive = np.random.rand() * 2.0 + 4.0
 
     sigma = np.zeros(sigma_pix.shape)
     sigma[sigma_pix == 0.0] = background
@@ -334,6 +340,8 @@ def _generate_one_sample(solver, mesh, z, reconstructor, alphas,
     noise = np.asarray(
         solver.InvLn * np.random.randn(Uel_sim.shape[0], 1)).reshape(-1, 1)
     Uel_noisy = Uel_sim + noise
+    if sys_bias is not None:
+        Uel_noisy += sys_bias.reshape(-1, 1)
 
     meas = Uel_noisy.flatten() if do_meas else None
 
@@ -368,7 +376,7 @@ def _init_solver_and_reco(level, ref_path, mesh_name, use_gpu,
     noise_std2 = 0.01
     solver.SetInvGamma(noise_std1, noise_std2, y_ref['Uelref'])
 
-    sigma_bg = np.ones((mesh.g.shape[0], 1)) * 0.745
+    sigma_bg = np.ones((mesh.g.shape[0], 1)) * 0.804
     Uelref = np.asarray(solver.SolveForward(sigma_bg, z)).reshape(-1, 1)
     noise = np.asarray(
         solver.InvLn * np.random.randn(Uelref.shape[0], 1)).reshape(-1, 1)
@@ -423,6 +431,12 @@ def _mp_worker_chunked(kwargs):
             measurements_only=kwargs['measurements_only'],
             save_measurements=kwargs['save_measurements'])
 
+    # Load systematic bias if provided
+    sys_bias = None
+    sys_bias_path = kwargs.get('sys_bias_path')
+    if sys_bias_path and os.path.exists(sys_bias_path):
+        sys_bias = np.load(sys_bias_path)
+
     gt_buf, meas_buf, reco_buf = [], [], []
     chunk_idx = 0
 
@@ -446,7 +460,8 @@ def _mp_worker_chunked(kwargs):
     for i in tqdm(range(num_images), desc=f'Worker {worker_id}',
                   position=worker_id, leave=False):
         gt, meas, reco = _generate_one_sample(
-            solver, mesh, z, reconstructor, alphas, do_meas, do_reco)
+            solver, mesh, z, reconstructor, alphas, do_meas, do_reco,
+            sys_bias=sys_bias)
         gt_buf.append(gt)
         if meas is not None:
             meas_buf.append(meas)
@@ -531,6 +546,19 @@ def main():
 
     levels = range(1, 8) if args.all_levels else [args.level]
 
+    # Resolve systematic bias path
+    sys_bias_path = args.sys_bias
+    if sys_bias_path is None:
+        default_path = 'data/systematic_bias.npy'
+        if os.path.exists(default_path):
+            sys_bias_path = default_path
+    if sys_bias_path and os.path.exists(sys_bias_path):
+        sys_bias = np.load(sys_bias_path)
+        print(f'Systematic bias loaded: {sys_bias_path} '
+              f'(mean={sys_bias.mean():.4e}, std={sys_bias.std():.4e})')
+    else:
+        sys_bias = None
+
     for level in levels:
         if args.workers > 1 and not args.gpu:
             # Multiprocess: chunked workers → .npz batches → merge to .h5
@@ -552,6 +580,7 @@ def main():
                     'mesh_name': args.mesh_name,
                     'save_measurements': args.save_measurements,
                     'measurements_only': args.measurements_only,
+                    'sys_bias_path': sys_bias_path,
                 })
             print(f'Using {w} workers for level {level} '
                   f'({samples_per_worker} samples/worker, '
@@ -578,6 +607,7 @@ def main():
                 start_idx=args.start_idx,
                 use_gpu=args.gpu,
                 use_hdf5=args.hdf5,
+                sys_bias=sys_bias,
             )
 
     print('Data generation complete.')
