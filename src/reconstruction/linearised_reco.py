@@ -144,6 +144,7 @@ class LinearisedRecoFenics():
 
     def _compute_save_and_load_R(self, alphas, cache_path):
         """Compute R matrices, save to disk, reload as mmap."""
+        os.makedirs(os.path.dirname(cache_path), exist_ok=True)
         # File lock to prevent concurrent writes
         lock_path = cache_path + '.lock'
         got_lock = False
@@ -156,11 +157,13 @@ class LinearisedRecoFenics():
             pass
 
         if got_lock:
-            self._compute_R_to_file(alphas, cache_path)
             try:
-                os.remove(lock_path)
-            except OSError:
-                pass
+                self._compute_R_to_file(alphas, cache_path)
+            finally:
+                try:
+                    os.remove(lock_path)
+                except OSError:
+                    pass
         else:
             # Another process is computing — wait for complete cache file
             import time as _time
@@ -176,6 +179,10 @@ class LinearisedRecoFenics():
                             break
                     except OSError:
                         pass
+        if not os.path.exists(cache_path):
+            raise FileNotFoundError(
+                f"R cache was not created successfully: {cache_path}"
+            )
 
         R_stack = np.load(cache_path, mmap_mode='r')
         self._R_precomputed = [R_stack[i] for i in range(R_stack.shape[0])]
@@ -218,7 +225,10 @@ class LinearisedRecoFenics():
         del R_list
         # Write to temp file then atomic rename to avoid partial-read races
         tmp_path = cache_path + '.tmp'
-        np.save(tmp_path, R_stack)
+        with open(tmp_path, 'wb') as f:
+            np.save(f, R_stack)
+            f.flush()
+            os.fsync(f.fileno())
         os.replace(tmp_path, cache_path)
 
     def reconstruct(self, Uel, alpha_tv, alpha_sm, alpha_lm):
