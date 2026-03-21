@@ -47,7 +47,7 @@ def parse_args():
         description='Train KTC2023 EIT reconstruction models')
 
     parser.add_argument('--method', type=str, required=True,
-                        choices=['fcunet', 'postp', 'condd'],
+                        choices=['fcunet', 'postp', 'condd', 'dpcaunet'],
                         help='Training method')
     parser.add_argument('--level', type=int, default=1,
                         help='Difficulty level for CondD (1-7)')
@@ -72,7 +72,7 @@ def parse_args():
     parser.add_argument('--seed', type=int, default=None,
                         help='Random seed (overrides config)')
     parser.add_argument('--device', type=str, default=None,
-                        help='Device (cuda/cpu)')
+                        help='Device (cuda/cpu/tpu)')
     parser.add_argument('--experiment-name', type=str, default=None,
                         help='Experiment name for result directory')
 
@@ -110,6 +110,15 @@ def main():
         _apply_overrides(config, args)
         trainer = CondDTrainer(
             config=config, level=args.level, experiment_name=name)
+
+    elif args.method == 'dpcaunet':
+        from src.configs import get_dpcaunet_config
+        from src.trainers import DPCAUNetTrainer
+
+        config = get_dpcaunet_config()
+        name = args.experiment_name or 'dpcaunet_baseline'
+        _apply_overrides(config, args)
+        trainer = DPCAUNetTrainer(config=config, experiment_name=name)
 
     else:
         print(f'Unknown method: {args.method}')

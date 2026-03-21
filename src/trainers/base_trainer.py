@@ -38,10 +38,14 @@ class BaseTrainer(ABC):
 
     def __init__(self, config, experiment_name='experiment'):
         self.config = config
-        self.device = (config.device
-                       if torch.cuda.is_available() and config.device == 'cuda'
-                       else 'cpu')
+        self.device = self._resolve_device(config.device)
         self.experiment_name = experiment_name
+
+        # TPU flag for xla-specific operations
+        self._xla = hasattr(self.device, 'type') and str(self.device).startswith('xla')
+        if self._xla:
+            import torch_xla.core.xla_model as xm
+            self._xm = xm
 
         self.model = None
         self.optimizer = None
@@ -58,6 +62,33 @@ class BaseTrainer(ABC):
         # Early stopping state
         self._es_counter = 0
         self._es_best_val_loss = None
+
+    @staticmethod
+    def _resolve_device(requested):
+        """Resolve device string, with TPU (xla) support.
+
+        Accepted values: 'cuda', 'cpu', 'tpu', 'xla'.
+        'tpu' is an alias for 'xla'.
+        Falls back to 'cpu' when the requested backend is unavailable.
+        """
+        if requested in ('tpu', 'xla'):
+            try:
+                import torch_xla.core.xla_model as xm
+                return xm.xla_device()
+            except ImportError:
+                print('Warning: torch_xla not installed, falling back to cpu. '
+                      'Install with: pip install torch_xla')
+                return 'cpu'
+        if requested == 'cuda' and torch.cuda.is_available():
+            return 'cuda'
+        if requested == 'cuda':
+            print('Warning: CUDA not available, falling back to cpu.')
+        return 'cpu'
+
+    def mark_step(self):
+        """Trigger XLA graph execution. No-op on CPU/CUDA."""
+        if self._xla:
+            self._xm.mark_step()
 
     # ------------------------------------------------------------------
     # Result directory management
@@ -246,6 +277,7 @@ class BaseTrainer(ABC):
 
         for idx, batch in pbar:
             loss_dict = self.train_step(batch)
+            self.mark_step()
             loss_val = loss_dict['loss']
 
             batch_size = batch[0].shape[0]

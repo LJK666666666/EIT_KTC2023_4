@@ -65,6 +65,9 @@ def build_pipeline(method_name, device, weights_base_dir, batch_mode):
         from src.pipelines import CondDPipeline
         return CondDPipeline(device=device, weights_base_dir=weights_base_dir,
                              batch_mode=batch_mode)
+    elif method_name == 'dpcaunet':
+        from src.pipelines import DPCAUNetPipeline
+        return DPCAUNetPipeline(device=device, weights_base_dir=weights_base_dir)
     else:
         raise ValueError(f'Unknown method: {method_name}')
 
@@ -206,12 +209,12 @@ def print_summary_table(all_results):
 def main():
     parser = argparse.ArgumentParser(description='Evaluate KTC2023 EIT reconstruction methods')
     parser.add_argument('--methods', nargs='+', default=['fcunet', 'postp', 'condd'],
-                        choices=['fcunet', 'postp', 'condd'],
+                        choices=['fcunet', 'postp', 'condd', 'dpcaunet'],
                         help='Methods to evaluate (default: all three)')
     parser.add_argument('--levels', nargs='+', type=int, default=list(range(1, 8)),
                         help='Difficulty levels to evaluate (default: 1-7)')
-    parser.add_argument('--device', default='cuda', choices=['cuda', 'cpu'],
-                        help='Compute device (default: cuda)')
+    parser.add_argument('--device', default='cuda',
+                        help='Compute device (cuda/cpu/tpu)')
     parser.add_argument('--weights-dir', default='KTC2023_SubmissionFiles',
                         help='Base directory for pre-trained weights')
     parser.add_argument('--eval-data-dir', default='KTC2023/EvaluationData/evaluation_datasets',

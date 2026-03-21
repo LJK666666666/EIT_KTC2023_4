@@ -388,3 +388,72 @@ python scripts/analyze_early_stopping.py --patience 10 --truncate results/fcunet
 
   系统偏差向量（2356 维）会加到每个样本的带噪测量值上，模拟真实水箱中 2D/3D 截断误差、电极偏差等固定系统误差。
 
+
+  src/data/advanced_phantom.py — 重写了形状生成逻辑：                                                                                                                     
+                                                                                                                                                                          
+  - 移除了布尔交并差（union/intersection/difference）操作                                                                                                                 
+  - 新增 5 种轮廓风格，每个物体独立生成、互不重叠：                                                                                                                       
+    - smooth：椭圆/圆弧（光滑边界）
+    - wavy：正弦波径向扰动（有机轮廓，类似水滴/云朵）
+    - angular：低顶点多边形 + 高尖锐度（锐角棱角）
+    - star：交替内外半径（星形/凹边）
+    - perlin：多谐波傅里叶调制半径（自然斑块）
+  - create_phantoms_advanced()：放置 1-5 个不重叠物体，碰撞检测基于包围圆 + 像素级验证
+  - create_phantoms_v2()：混合流水线（60% 轮廓 + 20% Perlin 阈值 + 20% Legacy），30% 概率叠加弹性形变
+
+  notebooks/test_advanced_phantom.ipynb — 更新为 8 个可视化部分，新增了每种轮廓风格的独立展示画廊。
+
+❯ 能不能改成用Keras3或JAX实现，方便GPU/TPU切换。
+
+● 这个建议我觉得不太合理，原因如下：
+
+  1. 整个代码库都是 PyTorch：BaseTrainer、DataLoader、checkpoint 机制、所有 pipeline、其他 3 个模型（FCUNet/PostP/CondD）全部是 PyTorch。仅 DPCA-UNet 用 Keras/JAX
+  会导致两套训练框架并存，维护成本很高。
+  2. 现有基础设施无法复用：BaseTrainer 的训练循环、ReduceLROnPlateau、早停、TensorBoard logging、checkpoint save/load 全部是 PyTorch API。改 Keras 需要重写整个训练器基类。  
+  3. 数据管线不兼容：FCUNetTrainingData 返回的是 PyTorch Tensor，DataLoader 也是 PyTorch 的。Keras/JAX 需要完全不同的数据管线。
+  4. PyTorch 本身已支持 GPU/TPU：torch_xla 可以在 TPU 上运行 PyTorch 代码，只需少量修改（设备改为 xla），不需要换框架。
+
+  如果你的目标是在 Colab TPU 上训练，更务实的方案是：
+  - 安装 torch_xla，把 device 从 cuda 改为 xla 即可
+  - 不需要重写任何模型代码
+
+  你确定要换 Keras/JAX 吗？还是说实际需求是 TPU 支持？
+
+✻ Churned for 1m 31s
+
+❯ 既然使用PyTorch为什么需要TensorFlow？
+
+● 不需要。TensorFlow 不是代码的依赖，是你环境里恰好装了 TensorFlow，而 torch.utils.tensorboard 导入时会尝试加载它，结果因为 TensorFlow 和 NumPy 2.x 不兼容而崩溃。
+
+  最简单的解决方案——卸载不需要的 TensorFlow：
+
+  pip uninstall tensorflow -y
+
+  或者如果你还需要 TensorFlow 做别的事，升级到兼容 NumPy 2 的版本：
+
+  pip install tensorflow --upgrade
+
+  使用方式：
+  # Colab TPU
+  pip install torch_xla
+  python scripts/train.py --method dpcaunet --device tpu
+
+  # 本地 GPU 不变
+  python scripts/train.py --method dpcaunet --device cuda
+
+
+Params: 4,130,371
+
+python -c "
+from src.models.fcunet import FCUNet
+from src.configs import get_fcunet_config
+c = get_fcunet_config()
+m = FCUNet(image_size=256, in_channels=c.model.in_channels, model_channels=c.model.model_channels, out_channels=c.model.out_channels,
+num_res_blocks=c.model.num_res_blocks, attention_resolutions=c.model.attention_resolutions, channel_mult=c.model.channel_mult, conv_resample=c.model.conv_resample,      
+dims=c.model.dims, num_heads=c.model.num_heads, num_head_channels=c.model.num_head_channels, num_heads_upsample=c.model.num_heads_upsample,
+use_scale_shift_norm=c.model.use_scale_shift_norm, resblock_updown=c.model.resblock_updown, use_new_attention_order=c.model.use_new_attention_order,
+max_period=c.model.max_period)
+print(sum(p.numel() for p in m.parameters()))
+"
+40,701,699
+

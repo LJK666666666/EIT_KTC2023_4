@@ -6,7 +6,14 @@ Generates random 256x256 phantom images with 3 classes:
   1: Resistive inclusion
   2: Conductive inclusion
 
-Extracted from: KTC2023_SubmissionFiles/ktc_training/src/dataset/SimDataset.py
+Shape types (7 styles):
+  - polygon    : irregular polygon with 5-8 vertices (legacy)
+  - circle     : ellipse with similar rx/ry
+  - rectangle  : axis-aligned rectangle
+  - wavy       : radial contour with sinusoidal lobes
+  - angular    : low-vertex polygon with sharp spiky corners
+  - star       : alternating inner/outer radii (concave arms)
+  - blob       : multi-harmonic Fourier radial modulation (natural blob)
 """
 
 import math
@@ -17,109 +24,223 @@ from PIL import Image, ImageDraw
 from scipy.ndimage import rotate
 
 
-def create_phantoms(min_inclusions=1, max_inclusions=4, max_iter=80,
-                    distance_between=25, p=None):
+# ---------------------------------------------------------------------------
+# Domain constants
+# ---------------------------------------------------------------------------
+_IMG_SIZE = 256
+_PIX_WIDTH = 0.23 / _IMG_SIZE
+_PIX_CENTER = np.linspace(
+    -0.115 + _PIX_WIDTH / 2, 0.115 - _PIX_WIDTH / 2 + _PIX_WIDTH, _IMG_SIZE)
+_X, _Y = np.meshgrid(_PIX_CENTER, _PIX_CENTER, indexing='ij')
+_DOMAIN_MASK = (_X ** 2 + _Y ** 2) <= 0.098 ** 2
+_DOMAIN_CENTER = _IMG_SIZE // 2
+_DOMAIN_RADIUS_PX = int(0.098 / _PIX_WIDTH)  # ~109
+
+# Number of inclusions: 1~5 with specified probabilities
+_N_INCLUSIONS_CHOICES = [1, 2, 3, 4, 5]
+_N_INCLUSIONS_PROBS = [0.15, 0.30, 0.30, 0.15, 0.10]
+
+# Shape types and their default probabilities
+SHAPE_TYPES = ['polygon', 'circle', 'rectangle', 'wavy', 'angular', 'star',
+               'blob']
+SHAPE_PROBS = [0.20, 0.10, 0.05, 0.25, 0.15, 0.10, 0.15]
+
+# Contour sampling resolution
+_N_CONTOUR_PTS = 128
+
+
+# ---------------------------------------------------------------------------
+# Contour generators (return dx, dy arrays relative to center)
+# ---------------------------------------------------------------------------
+
+def _contour_wavy(avg_r, n_pts=_N_CONTOUR_PTS):
+    """Sinusoidal radial perturbation — organic / amoeba-like contour."""
+    theta = np.linspace(0, 2 * np.pi, n_pts, endpoint=False)
+    n_lobes = np.random.randint(2, 6)
+    amp = np.random.uniform(0.15, 0.35) * avg_r
+    phase = np.random.uniform(0, 2 * np.pi)
+    r = avg_r + amp * np.sin(n_lobes * theta + phase)
+    # Optional second harmonic
+    if np.random.rand() < 0.5:
+        n2 = np.random.randint(3, 8)
+        amp2 = np.random.uniform(0.05, 0.15) * avg_r
+        r += amp2 * np.sin(n2 * theta + np.random.uniform(0, 2 * np.pi))
+    return r * np.cos(theta), r * np.sin(theta)
+
+
+def _contour_angular(avg_r, n_pts=_N_CONTOUR_PTS):
+    """Low-vertex polygon with large radius variance — sharp spiky corners."""
+    n_verts = np.random.randint(3, 7)
+    raw = np.random.uniform(0.5, 1.5, size=n_verts)
+    angles_v = np.cumsum(raw / raw.sum() * 2 * np.pi)
+    radii_v = avg_r * np.random.uniform(0.45, 1.25, size=n_verts)
+
+    angles_v = np.concatenate([angles_v, [angles_v[0] + 2 * np.pi]])
+    radii_v = np.concatenate([radii_v, [radii_v[0]]])
+    theta = np.linspace(0, 2 * np.pi, n_pts, endpoint=False)
+    r = np.interp(theta, angles_v, radii_v, period=2 * np.pi)
+    return r * np.cos(theta), r * np.sin(theta)
+
+
+def _contour_star(avg_r, n_pts=_N_CONTOUR_PTS):
+    """Alternating inner/outer radii — star / concave arms."""
+    n_arms = np.random.randint(3, 8)
+    r_outer = avg_r * np.random.uniform(0.8, 1.15)
+    r_inner = avg_r * np.random.uniform(0.25, 0.55)
+
+    angles_v = np.linspace(0, 2 * np.pi, 2 * n_arms, endpoint=False)
+    radii_v = np.empty(2 * n_arms)
+    radii_v[0::2] = r_outer
+    radii_v[1::2] = r_inner
+    radii_v += np.random.uniform(-0.08, 0.08, size=len(radii_v)) * avg_r
+
+    angles_v = np.concatenate([angles_v, [angles_v[0] + 2 * np.pi]])
+    radii_v = np.concatenate([radii_v, [radii_v[0]]])
+    theta = np.linspace(0, 2 * np.pi, n_pts, endpoint=False)
+    r = np.interp(theta, angles_v, radii_v, period=2 * np.pi)
+    return r * np.cos(theta), r * np.sin(theta)
+
+
+def _contour_blob(avg_r, n_pts=_N_CONTOUR_PTS):
+    """Multi-harmonic Fourier radius modulation — natural blob."""
+    theta = np.linspace(0, 2 * np.pi, n_pts, endpoint=False)
+    r = np.full(n_pts, float(avg_r))
+    n_harmonics = np.random.randint(3, 8)
+    for k in range(1, n_harmonics + 1):
+        amp = np.random.uniform(0.05, 0.25) * avg_r / k
+        phase = np.random.uniform(0, 2 * np.pi)
+        r += amp * np.sin(k * theta + phase)
+    r = np.clip(r, avg_r * 0.3, avg_r * 1.5)
+    return r * np.cos(theta), r * np.sin(theta)
+
+
+# ---------------------------------------------------------------------------
+# Drawing helpers
+# ---------------------------------------------------------------------------
+
+def _draw_contour_shape(draw, cx, cy, avg_r, contour_fn, fill_val):
+    """Generate contour via contour_fn, apply random rotation, and draw."""
+    dx, dy = contour_fn(avg_r)
+    angle = np.random.uniform(0, 2 * np.pi)
+    cos_a, sin_a = math.cos(angle), math.sin(angle)
+    rx = cos_a * dx - sin_a * dy + cx
+    ry = sin_a * dx + cos_a * dy + cy
+    vertices = list(zip(rx.tolist(), ry.tolist()))
+    draw.polygon(vertices, fill=fill_val)
+
+
+# ---------------------------------------------------------------------------
+# Main generation function
+# ---------------------------------------------------------------------------
+
+def create_phantoms(max_iter=120, distance_between=10, p=None):
     """Generate a random 256x256 phantom image with values {0, 1, 2}.
 
-    Creates random inclusions (polygons, circles, rectangles) inside
-    a circular domain mask. Each inclusion is randomly assigned class
-    1 (resistive) or 2 (conductive).
+    Places 1-5 non-overlapping inclusions with diverse contour styles
+    inside a circular domain mask. Each inclusion is randomly assigned
+    class 1 (resistive) or 2 (conductive).
 
     Args:
-        min_inclusions: Minimum number of inclusions to place.
-        max_inclusions: Maximum number of inclusions to place.
         max_iter: Maximum placement attempts before giving up.
-        distance_between: Minimum pixel distance between inclusion centers.
-        p: Probability weights for [polygon, circle, rectangle] types.
+        distance_between: Minimum pixel gap between inclusion bounding circles.
+        p: Probability weights for shape types. Length must match SHAPE_TYPES.
+            Default: [0.20, 0.10, 0.05, 0.25, 0.15, 0.10, 0.15] for
+            [polygon, circle, rectangle, wavy, angular, star, blob].
 
     Returns:
         np.ndarray: 256x256 array with integer values in {0, 1, 2}.
     """
     if p is None:
-        p = [0.7, 0.15, 0.15]
+        p = SHAPE_PROBS
 
-    rectangle_dict = {
-        'min_width': 25, 'max_width': 50,
-        'min_height': 40, 'max_height': 120,
-    }
-
-    pixwidth = 0.23 / 256
-    pixcenter_x = np.linspace(
-        -0.115 + pixwidth / 2, 0.115 - pixwidth / 2 + pixwidth, 256)
-    pixcenter_y = pixcenter_x
-    X, Y = np.meshgrid(pixcenter_x, pixcenter_y, indexing='ij')
-
-    I = np.zeros((256, 256))
-    im = Image.fromarray(np.uint8(I))
+    im = Image.fromarray(np.zeros((_IMG_SIZE, _IMG_SIZE), dtype=np.uint8))
     draw = ImageDraw.Draw(im)
 
-    num_forms = np.random.randint(min_inclusions, max_inclusions)
-    circle_list = []
+    num_forms = np.random.choice(_N_INCLUSIONS_CHOICES, p=_N_INCLUSIONS_PROBS)
+    placed = []  # (cx, cy, avg_radius)
     iteration = 0
 
-    while len(circle_list) < num_forms:
-        object_type = np.random.choice(['polygon', 'circle', 'rectangle'], p=p)
+    while len(placed) < num_forms and iteration < max_iter:
+        iteration += 1
 
-        if object_type == 'rectangle':
-            lower_x = 50 + np.random.randint(-24, 24)
-            lower_y = 50 + np.random.randint(-24, 24)
-            width = np.random.randint(
-                rectangle_dict['min_width'], rectangle_dict['max_width'])
-            height = np.random.randint(
-                rectangle_dict['min_height'], rectangle_dict['max_height'])
-            center_x = lower_x + width / 2
-            center_y = lower_y + height / 2
-            avg_radius = max(width / 2, height / 2)
-        else:
-            avg_radius = np.random.randint(25, 50)
-            center_x = 128 + np.random.randint(-54, 54)
-            center_y = 128 + np.random.randint(-54, 54)
+        avg_radius = np.random.randint(18, 55)
 
-        # Collision detection
+        # Random center inside domain with margin
+        margin = avg_radius + 5
+        max_offset = _DOMAIN_RADIUS_PX - margin
+        if max_offset < 5:
+            max_offset = 5
+
+        cx = _DOMAIN_CENTER + np.random.randint(-max_offset, max_offset + 1)
+        cy = _DOMAIN_CENTER + np.random.randint(-max_offset, max_offset + 1)
+
+        # Ensure center + radius fits in circular domain
+        dist = math.hypot(cx - _DOMAIN_CENTER, cy - _DOMAIN_CENTER)
+        if dist + avg_radius > _DOMAIN_RADIUS_PX:
+            continue
+
+        # Collision detection (bounding circle + gap)
         collide = False
-        for x, y, r in circle_list:
-            d = (center_x - x) ** 2 + (center_y - y) ** 2
-            if d < (avg_radius + r + distance_between) ** 2:
+        for ox, oy, o_r in placed:
+            d = math.hypot(cx - ox, cy - oy)
+            if d < avg_radius + o_r + distance_between:
                 collide = True
                 break
+        if collide:
+            continue
 
-        if not collide:
-            fill_val = 1 if np.random.rand() < 0.5 else 2
+        fill_val = 1 if np.random.rand() < 0.5 else 2
+        shape_type = np.random.choice(SHAPE_TYPES, p=p)
 
-            if object_type == 'rectangle':
-                draw.rectangle(
-                    [lower_x, lower_y, lower_x + width, lower_y + height],
-                    fill=fill_val)
-            elif object_type == 'circle':
-                draw.ellipse(
-                    (center_x - avg_radius, center_y - avg_radius,
-                     center_x + avg_radius, center_y + avg_radius),
-                    fill=fill_val)
-            elif object_type == 'polygon':
-                num_vertices = np.random.randint(5, 9)
-                vertices = generate_polygon(
-                    center=(center_x, center_y),
-                    avg_radius=avg_radius,
-                    irregularity=0.4,
-                    spikiness=0.3,
-                    num_vertices=num_vertices)
-                draw.polygon(vertices, fill=fill_val)
+        if shape_type == 'rectangle':
+            # Axis-aligned rectangle inscribed in bounding circle
+            w = np.random.randint(max(10, avg_radius // 2), avg_radius * 2)
+            h = np.random.randint(max(10, avg_radius // 2), avg_radius * 2)
+            draw.rectangle(
+                [cx - w // 2, cy - h // 2, cx + w // 2, cy + h // 2],
+                fill=fill_val)
+        elif shape_type == 'circle':
+            # Ellipse with similar rx/ry
+            rx = avg_radius * np.random.uniform(0.7, 1.0)
+            ry = avg_radius * np.random.uniform(0.7, 1.0)
+            draw.ellipse(
+                [cx - rx, cy - ry, cx + rx, cy + ry], fill=fill_val)
+        elif shape_type == 'polygon':
+            num_vertices = np.random.randint(5, 9)
+            vertices = generate_polygon(
+                center=(cx, cy), avg_radius=avg_radius,
+                irregularity=0.4, spikiness=0.3,
+                num_vertices=num_vertices)
+            draw.polygon(vertices, fill=fill_val)
+        elif shape_type == 'wavy':
+            _draw_contour_shape(draw, cx, cy, avg_radius,
+                                _contour_wavy, fill_val)
+        elif shape_type == 'angular':
+            _draw_contour_shape(draw, cx, cy, avg_radius,
+                                _contour_angular, fill_val)
+        elif shape_type == 'star':
+            _draw_contour_shape(draw, cx, cy, avg_radius,
+                                _contour_star, fill_val)
+        elif shape_type == 'blob':
+            _draw_contour_shape(draw, cx, cy, avg_radius,
+                                _contour_blob, fill_val)
 
-            circle_list.append((center_x, center_y, avg_radius))
-
-        iteration += 1
-        if iteration > max_iter:
-            break
+        placed.append((cx, cy, avg_radius))
 
     sigma_pix = np.array(np.asarray(im))
-    sigma_pix[X ** 2 + Y ** 2 > 0.098 ** 2] = 0.0
-    angle = np.random.randint(0, 180)
+    sigma_pix[~_DOMAIN_MASK] = 0
+    angle = np.random.randint(0, 360)
     sigma_pix = np.round(
         rotate(sigma_pix, angle, mode='constant', cval=0.0,
                reshape=False, order=0))
+    sigma_pix[~_DOMAIN_MASK] = 0
 
     return sigma_pix
 
+
+# ---------------------------------------------------------------------------
+# Legacy polygon helper (kept for 'polygon' shape type)
+# ---------------------------------------------------------------------------
 
 def generate_polygon(center, avg_radius, irregularity, spikiness,
                      num_vertices):
