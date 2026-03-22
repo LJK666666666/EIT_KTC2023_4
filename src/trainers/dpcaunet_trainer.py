@@ -1,18 +1,16 @@
 """
-DPCAUNet trainer: three-stage training for cross-attention EIT reconstruction.
+DPCAUNet trainer with convergence acceleration.
 
 Stage 1 (stage1_epochs):
     Train attention module + pretrain_head only (1x1 conv).
-    Loss: CrossEntropy on coarse prediction.
     Goal: learn meaningful attention feature maps.
 
-Stage 2 (stage2_epochs):
-    Freeze attention, train UNet + aux heads with deep supervision.
-    Loss: main CE + weighted auxiliary CE from each decoder block.
-
 Stage 3 (remaining epochs):
-    Unfreeze all, linearly decay aux loss weights to 0.
-    Network focuses on optimizing the main output.
+    Unfreeze all, deep supervision with aux weight decay.
+    Linear warmup + cosine annealing LR schedule.
+    Grouped LR: attention layers use 1/10 of base LR.
+    Loss: Dice + Focal (anti background-gradient domination).
+    Measurement normalization: zero-mean, unit-variance.
 """
 
 import os
@@ -30,11 +28,12 @@ from ..configs.dpcaunet_config import get_configs as get_dpcaunet_config
 from ..models.dpcaunet import DPCAUNet
 from ..data import FCUNetTrainingData
 from ..evaluation.scoring import FastScoringFunction
+from ..losses import DiceFocalLoss
 from ..utils.measurement import create_vincl
 
 
 class DPCAUNetTrainer(BaseTrainer):
-    """Three-stage trainer for DPCA-UNet."""
+    """Two-stage trainer for DPCA-UNet with convergence optimizations."""
 
     def __init__(self, config=None, experiment_name='dpcaunet_baseline'):
         if config is None:
@@ -42,11 +41,17 @@ class DPCAUNetTrainer(BaseTrainer):
         super().__init__(config, experiment_name)
 
         self.vincl_dict = None
-        self.loss_fn = nn.CrossEntropyLoss()
+        self.loss_fn = DiceFocalLoss()
         self.training_stage = 1
-        # Auxiliary loss weights (current, may decay in stage 3)
         self._aux_weights = list(config.training.get(
-            'aux_weights', (0.4, 0.2, 0.1)))
+            'aux_weights', (0.5, 0.25, 0.125)))
+        # Measurement normalization stats (computed from training set)
+        self._meas_mean = None  # tensor on device
+        self._meas_std = None
+
+    # ------------------------------------------------------------------
+    # Model & optimizer
+    # ------------------------------------------------------------------
 
     def build_model(self):
         model = DPCAUNet(
@@ -62,21 +67,62 @@ class DPCAUNetTrainer(BaseTrainer):
         model.to(self.device)
         self.model = model
 
-        n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        n_params = sum(p.numel() for p in model.parameters()
+                       if p.requires_grad)
         print(f'DPCAUNet parameters: {n_params:,}')
 
+        # Placeholder optimizer (rebuilt per stage)
         self.optimizer = torch.optim.AdamW(
             model.parameters(), lr=self.config.training.lr)
-        self.scheduler = lr_scheduler.ReduceLROnPlateau(
-            self.optimizer,
-            mode='min',
-            patience=self.config.training.scheduler_patience,
-            factor=self.config.training.scheduler_factor)
+        self.scheduler = None
+
+    def _build_grouped_optimizer(self, lr, trainable_only=False):
+        """Build AdamW with grouped LR: attention gets lr/10."""
+        attn_names = ['electrode_encoder', 'spatial_query', 'cross_attn',
+                      'level_embed', 'cascaded_attn']
+        attn_params, other_params = [], []
+        for name, p in self.model.named_parameters():
+            if trainable_only and not p.requires_grad:
+                continue
+            if any(name.startswith(n) for n in attn_names):
+                attn_params.append(p)
+            else:
+                other_params.append(p)
+
+        param_groups = []
+        if attn_params:
+            param_groups.append({
+                'params': attn_params, 'lr': lr * 0.1})
+        if other_params:
+            param_groups.append({
+                'params': other_params, 'lr': lr})
+
+        wd = self.config.training.get('weight_decay', 1e-4)
+        return torch.optim.AdamW(param_groups, weight_decay=wd)
+
+    def _build_warmup_cosine_scheduler(self, optimizer, total_epochs,
+                                       warmup_epochs):
+        """Linear warmup + cosine annealing scheduler (per-epoch step)."""
+        steps_per_epoch = len(self.train_loader)
+        total_steps = total_epochs * steps_per_epoch
+        warmup_steps = warmup_epochs * steps_per_epoch
+
+        def lr_lambda(step):
+            if step < warmup_steps:
+                return step / max(warmup_steps, 1)
+            progress = (step - warmup_steps) / max(
+                total_steps - warmup_steps, 1)
+            return 0.5 * (1.0 + np.cos(np.pi * progress))
+
+        return lr_scheduler.LambdaLR(optimizer, lr_lambda)
+
+    # ------------------------------------------------------------------
+    # Freeze / unfreeze helpers
+    # ------------------------------------------------------------------
 
     def _attention_params(self):
-        """Return parameters belonging to the attention module."""
         names = ['electrode_encoder', 'spatial_query', 'cross_attn',
-                 'level_embed']
+                 'level_embed', 'cascaded_attn']
         params = []
         for name, p in self.model.named_parameters():
             if any(name.startswith(n) for n in names):
@@ -92,9 +138,8 @@ class DPCAUNetTrainer(BaseTrainer):
             p.requires_grad = True
 
     def _freeze_unet(self):
-        """Freeze everything except attention + pretrain_head."""
         attn_names = ['electrode_encoder', 'spatial_query', 'cross_attn',
-                      'level_embed', 'pretrain_head']
+                      'level_embed', 'cascaded_attn', 'pretrain_head']
         for name, p in self.model.named_parameters():
             if not any(name.startswith(n) for n in attn_names):
                 p.requires_grad = False
@@ -102,6 +147,10 @@ class DPCAUNetTrainer(BaseTrainer):
     def _unfreeze_all(self):
         for p in self.model.parameters():
             p.requires_grad = True
+
+    # ------------------------------------------------------------------
+    # Data
+    # ------------------------------------------------------------------
 
     def build_datasets(self):
         ref_path = self.config.data.ref_path
@@ -172,6 +221,37 @@ class DPCAUNetTrainer(BaseTrainer):
             self.vincl_dict[lvl] = create_vincl(lvl, Injref).T.flatten()
 
         self._load_val_data()
+        self._compute_normalization_stats()
+
+    def _compute_normalization_stats(self):
+        """Compute measurement mean/std from a pass over the training set."""
+        print('Computing measurement normalization stats...')
+        all_meas = []
+        for y, _ in self.train_loader:
+            all_meas.append(y)
+            if len(all_meas) * y.shape[0] >= 200:
+                break  # enough samples for stable statistics
+        all_meas = torch.cat(all_meas, dim=0)
+        # Only compute stats on non-zero elements (vincl-masked regions are 0)
+        nonzero_mask = all_meas != 0
+        if nonzero_mask.sum() > 0:
+            mean_val = all_meas[nonzero_mask].mean().item()
+            std_val = all_meas[nonzero_mask].std().item()
+        else:
+            mean_val, std_val = 0.0, 1.0
+        std_val = max(std_val, 1e-8)
+        self._meas_mean = torch.tensor(mean_val, device=self.device)
+        self._meas_std = torch.tensor(std_val, device=self.device)
+        print(f'  Measurement stats: mean={mean_val:.6f}, std={std_val:.6f}')
+
+    def _normalize_measurements(self, y):
+        """Normalize measurements: (y - mean) / std, keeping zeros at zero."""
+        if self._meas_mean is None:
+            return y
+        mask = y != 0
+        y_norm = torch.zeros_like(y)
+        y_norm[mask] = (y[mask] - self._meas_mean) / self._meas_std
+        return y_norm
 
     def _load_val_data(self):
         gt_dir = self.config.validation.gt_dir
@@ -198,8 +278,11 @@ class DPCAUNetTrainer(BaseTrainer):
                 lvl: np.stack(arrs) for lvl, arrs in y_val_dict.items()},
         }
 
+    # ------------------------------------------------------------------
+    # Train / validate steps
+    # ------------------------------------------------------------------
+
     def _apply_vincl(self, y, levels):
-        """Apply vincl mask in-place."""
         for k in range(y.shape[0]):
             y[k, ~self.vincl_dict[levels[k]]] = 0.0
 
@@ -217,6 +300,7 @@ class DPCAUNetTrainer(BaseTrainer):
         levels_tensor = torch.from_numpy(levels).float().to(self.device)
         gt = gt.to(self.device)
         y = y.to(self.device)
+        y = self._normalize_measurements(y)
 
         self.optimizer.zero_grad()
 
@@ -240,6 +324,10 @@ class DPCAUNetTrainer(BaseTrainer):
         torch.nn.utils.clip_grad_norm_(self.model.parameters(), grad_clip)
         self.optimizer.step()
 
+        # Step per-iteration scheduler (warmup + cosine)
+        if self.scheduler is not None:
+            self.scheduler.step()
+
         return {'loss': loss.item()}
 
     def validate(self, epoch):
@@ -259,6 +347,7 @@ class DPCAUNetTrainer(BaseTrainer):
             levels_tensor = torch.from_numpy(levels).float().to(self.device)
             y = y.to(self.device)
             gt = gt.to(self.device)
+            y = self._normalize_measurements(y)
 
             with torch.no_grad():
                 with self._autocast_context():
@@ -276,7 +365,7 @@ class DPCAUNetTrainer(BaseTrainer):
         return {'val_loss': avg_loss}
 
     # ------------------------------------------------------------------
-    # Three-stage training loop
+    # Training loop
     # ------------------------------------------------------------------
 
     def train(self):
@@ -302,11 +391,11 @@ class DPCAUNetTrainer(BaseTrainer):
         save_freq = self.config.training.get('save_freq', 5)
 
         s1_epochs = self.config.training.stage1_epochs
-        s2_epochs = self.config.training.stage2_epochs
         total_epochs = self.config.training.epochs
         aux_decay_epochs = self.config.training.aux_decay_epochs
+        warmup_epochs = self.config.training.get('warmup_epochs', 5)
         aux_weights_init = list(self.config.training.get(
-            'aux_weights', (0.4, 0.2, 0.1)))
+            'aux_weights', (0.5, 0.25, 0.125)))
 
         # ---- Stage 1: Pretrain attention ----
         if self.training_stage == 1:
@@ -314,11 +403,12 @@ class DPCAUNetTrainer(BaseTrainer):
                   f'(epochs 1-{s1_epochs})')
             print(f'Results directory: {self.result_dir}')
 
-            # Freeze UNet, only train attention + pretrain_head
             self._freeze_unet()
-            self.optimizer = torch.optim.AdamW(
-                filter(lambda p: p.requires_grad, self.model.parameters()),
-                lr=self.config.training.stage1_lr)
+            self.optimizer = self._build_grouped_optimizer(
+                self.config.training.stage1_lr, trainable_only=True)
+            self.scheduler = self._build_warmup_cosine_scheduler(
+                self.optimizer, s1_epochs,
+                warmup_epochs=min(3, s1_epochs))
 
             for epoch in range(self.current_epoch, s1_epochs):
                 self.current_epoch = epoch
@@ -335,74 +425,12 @@ class DPCAUNetTrainer(BaseTrainer):
                         val_metrics = self.validate(epoch)
                     self.model.train()
 
-                self._log_epoch(epoch, {**epoch_metrics, **val_metrics,
-                                        'stage': 1})
-
-                if save_freq > 0 and (epoch + 1) % save_freq == 0:
-                    self._save_checkpoint('last.pt')
-
-                if max_iters and self.global_step >= max_iters:
-                    self._save_checkpoint('last.pt')
-                    print(f'Quick test: reached {max_iters} iterations.')
-                    self._finish()
-                    return
-
-            self._save_checkpoint('last.pt')
-            self.training_stage = 2
-            self.current_epoch = 0
-            self.global_step = 0
-
-        # ---- Stage 2: Freeze attention, deep supervision ----
-        if self.training_stage == 2:
-            print(f'Stage 2: Freeze attention, deep supervision '
-                  f'(epochs 1-{s2_epochs})')
-
-            self._unfreeze_all()
-            self._freeze_attention()
-            self._aux_weights = list(aux_weights_init)
-            self.optimizer = torch.optim.AdamW(
-                filter(lambda p: p.requires_grad, self.model.parameters()),
-                lr=self.config.training.stage2_lr)
-            self.scheduler = lr_scheduler.ReduceLROnPlateau(
-                self.optimizer, mode='min',
-                patience=self.config.training.scheduler_patience,
-                factor=self.config.training.scheduler_factor)
-
-            s2_start = self.current_epoch if self.current_epoch < s2_epochs \
-                else 0
-            for epoch in range(s2_start, s2_epochs):
-                self.current_epoch = epoch
-                self.model.train()
-                self.training_stage = 2
-
-                epoch_metrics = self._train_epoch(epoch, max_iters=max_iters)
-
-                val_metrics = {}
-                val_freq = self.config.training.get('val_freq', 1)
-                if val_freq > 0 and (epoch + 1) % val_freq == 0:
-                    self.model.eval()
-                    with torch.no_grad():
-                        val_metrics = self.validate(epoch)
-                    self.model.train()
-
-                all_metrics = {**epoch_metrics, **val_metrics, 'stage': 2}
+                all_metrics = {**epoch_metrics, **val_metrics, 'stage': 1}
                 all_metrics['lr'] = self.optimizer.param_groups[0]['lr']
                 self._log_epoch(epoch, all_metrics)
 
-                if self.scheduler is not None:
-                    sched_metric = val_metrics.get(
-                        'val_loss', epoch_metrics.get('avg_loss'))
-                    if sched_metric is not None:
-                        self.scheduler.step(sched_metric)
-
                 if save_freq > 0 and (epoch + 1) % save_freq == 0:
                     self._save_checkpoint('last.pt')
-
-                if 'val_loss' in val_metrics:
-                    if (self.best_metric is None
-                            or val_metrics['val_loss'] < self.best_metric):
-                        self.best_metric = val_metrics['val_loss']
-                        self._save_checkpoint('best.pt')
 
                 if max_iters and self.global_step >= max_iters:
                     self._save_checkpoint('last.pt')
@@ -415,20 +443,25 @@ class DPCAUNetTrainer(BaseTrainer):
             self.current_epoch = 0
             self.global_step = 0
 
-        # ---- Stage 3: Unfreeze all, aux decay, fine-tune ----
+        # ---- Stage 2 (removed): directly enter stage 3 ----
+        if self.training_stage == 2:
+            self.training_stage = 3
+            self.current_epoch = 0
+            self.global_step = 0
+
+        # ---- Stage 3: Unfreeze all, warmup + cosine, aux decay ----
         self._unfreeze_all()
         self._es_counter = 0
         self._es_best_val_loss = None
-        s3_total = total_epochs - s1_epochs - s2_epochs
-        print(f'Stage 3: Full fine-tuning with aux decay '
-              f'(epochs 1-{s3_total}, aux decay over {aux_decay_epochs})')
+        s3_total = total_epochs - s1_epochs
+        print(f'Stage 3: Full fine-tuning '
+              f'(epochs 1-{s3_total}, warmup {warmup_epochs} epochs, '
+              f'aux decay over {aux_decay_epochs})')
 
-        self.optimizer = torch.optim.AdamW(
-            self.model.parameters(), lr=self.config.training.lr)
-        self.scheduler = lr_scheduler.ReduceLROnPlateau(
-            self.optimizer, mode='min',
-            patience=self.config.training.scheduler_patience,
-            factor=self.config.training.scheduler_factor)
+        self.optimizer = self._build_grouped_optimizer(
+            self.config.training.lr)
+        self.scheduler = self._build_warmup_cosine_scheduler(
+            self.optimizer, s3_total, warmup_epochs)
 
         for epoch in range(self.current_epoch, s3_total):
             self.current_epoch = epoch
@@ -453,18 +486,15 @@ class DPCAUNetTrainer(BaseTrainer):
 
             all_metrics = {**epoch_metrics, **val_metrics, 'stage': 3,
                            'aux_decay': decay}
-            all_metrics['lr'] = self.optimizer.param_groups[0]['lr']
+            all_metrics['lr'] = self.optimizer.param_groups[-1]['lr']
             if self.writer:
                 self.writer.add_scalar(
                     'train/lr', all_metrics['lr'], self.global_step)
                 self.writer.add_scalar(
+                    'train/lr_attn',
+                    self.optimizer.param_groups[0]['lr'], self.global_step)
+                self.writer.add_scalar(
                     'train/aux_decay', decay, self.global_step)
-
-            if self.scheduler is not None:
-                sched_metric = val_metrics.get(
-                    'val_loss', epoch_metrics.get('avg_loss'))
-                if sched_metric is not None:
-                    self.scheduler.step(sched_metric)
 
             self._log_epoch(epoch, all_metrics)
 
@@ -516,8 +546,15 @@ class DPCAUNetTrainer(BaseTrainer):
         return {
             'training_stage': self.training_stage,
             'aux_weights': self._aux_weights,
+            'meas_mean': self._meas_mean.item() if self._meas_mean is not None else None,
+            'meas_std': self._meas_std.item() if self._meas_std is not None else None,
         }
 
     def load_checkpoint_extra(self, state):
         self.training_stage = state.get('training_stage', 3)
         self._aux_weights = state.get('aux_weights', self._aux_weights)
+        if state.get('meas_mean') is not None:
+            self._meas_mean = torch.tensor(
+                state['meas_mean'], device=self.device)
+            self._meas_std = torch.tensor(
+                state['meas_std'], device=self.device)

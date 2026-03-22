@@ -556,3 +556,39 @@ Data generation complete.
   d_model=128, encoder_channels=(128,256,512,512)
 
   通过命令行调整的话，需要把这些参数暴露到 CLI。要我加一下吗？还是你直接改 src/configs/dpcaunet_config.py 里的值？
+
+
+
+● 全部完成。以下是 5 项收敛加速改动的总结：
+
+  1. Linear Warmup + Cosine Annealing 调度器
+
+  - 替换了 ReduceLROnPlateau
+  - Stage 1：3 epoch warmup + cosine
+  - Stage 3：5 epoch warmup + cosine（warmup_epochs 可配置）
+  - 每 iteration step，不是每 epoch
+
+  2. 残差零初始化 (Zero-Init Residual)
+
+  - DPCAUNet：cross_attn.out_proj 权重和偏置初始化为 0
+  - HCDPCAUNet：CascadedCrossAttentionLayer 的 out_proj 和 FFN 末层、两个模型的 ConvBlock 最后一个 Conv 层均零初始化
+  - 效果：训练初期网络近似恒等映射，低频先收敛，高频逐步加入
+
+  3. Dice + Focal 混合损失
+
+  - src/losses/dice_focal.py：0.5 * Dice + 0.5 * Focal(gamma=2.0)
+  - Dice 关注形状重合度，Focal 自动降低背景像素权重
+  - 解决 95% 背景导致的"背景梯度淹没"
+
+  4. 分组学习率 + 测量数据归一化
+
+  - 分组 LR：注意力模块 lr * 0.1，UNet 等其他部分 lr * 1.0
+  - 归一化：训练开始时统计非零测量值的 mean/std，训练和验证中 (y - mean) / std，保持 vincl 零值不变
+  - mean/std 保存到 checkpoint 供恢复训练使用
+
+  5. 深监督权重指数衰减
+
+  - DPCAUNet (3 decoder blocks)：(0.5, 0.25, 0.125)
+  - HCDPCAUNet (4 decoder blocks)：(0.5, 0.25, 0.125, 0.0625)
+  - 避免低分辨率层强行拟合高频边缘导致梯度冲突
+

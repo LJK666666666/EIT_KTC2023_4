@@ -134,6 +134,8 @@ class MultiHeadCrossAttention(nn.Module):
         self.scale = math.sqrt(self.d_head)
 
         self.out_proj = nn.Linear(d_model, d_model)
+        nn.init.zeros_(self.out_proj.weight)
+        nn.init.zeros_(self.out_proj.bias)
 
     def forward(self, Q, K, V, mask=None):
         B, Nq, D = Q.shape
@@ -178,7 +180,7 @@ class DualPool(nn.Module):
 
 
 class ConvBlock(nn.Module):
-    """Two convolutions with BatchNorm and GELU."""
+    """Two convolutions with BatchNorm and GELU. Last conv zero-initialized."""
 
     def __init__(self, in_ch, out_ch):
         super().__init__()
@@ -190,6 +192,9 @@ class ConvBlock(nn.Module):
             nn.BatchNorm2d(out_ch),
             nn.GELU(),
         )
+        # Zero-init last conv for residual-friendly start
+        nn.init.zeros_(self.net[3].weight)
+        nn.init.zeros_(self.net[3].bias)
 
     def forward(self, x):
         return self.net(x)

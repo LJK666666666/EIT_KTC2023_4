@@ -198,6 +198,12 @@ class CascadedCrossAttentionLayer(nn.Module):
             nn.Linear(d_model * 4, d_model),
         )
 
+        # Zero-init residual branches
+        nn.init.zeros_(self.out_proj.weight)
+        nn.init.zeros_(self.out_proj.bias)
+        nn.init.zeros_(self.ffn[2].weight)
+        nn.init.zeros_(self.ffn[2].bias)
+
     def _cross_attention(self, Q, K, V, mask=None):
         B, Nq, D = Q.shape
         Nk = K.shape[1]
@@ -259,7 +265,7 @@ class DualPool(nn.Module):
 
 
 class ConvBlock(nn.Module):
-    """Two convolutions with BatchNorm and GELU."""
+    """Two convolutions with BatchNorm and GELU. Last conv zero-initialized."""
 
     def __init__(self, in_ch, out_ch):
         super().__init__()
@@ -271,6 +277,8 @@ class ConvBlock(nn.Module):
             nn.BatchNorm2d(out_ch),
             nn.GELU(),
         )
+        nn.init.zeros_(self.net[3].weight)
+        nn.init.zeros_(self.net[3].bias)
 
     def forward(self, x):
         return self.net(x)

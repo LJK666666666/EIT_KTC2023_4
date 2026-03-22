@@ -17,12 +17,14 @@ def get_configs():
     training.num_workers = 8
 
     # Three-stage training
-    training.stage1_epochs = 20
+    training.stage1_epochs = 10
     training.stage1_lr = 1e-3
-    training.stage2_epochs = 10
+    training.stage2_epochs = 0
     training.stage2_lr = 5e-4
-    training.aux_weights = (0.4, 0.2, 0.1, 0.05)  # 4 decoder blocks
+    training.aux_weights = (0.5, 0.25, 0.125, 0.0625)  # 4 decoder blocks
     training.aux_decay_epochs = 10
+    training.warmup_epochs = 5
+    training.weight_decay = 1e-4
 
     # model configs
     config.model = model = ml_collections.ConfigDict()

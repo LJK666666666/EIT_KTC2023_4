@@ -17,12 +17,14 @@ def get_configs():
     training.num_workers = 8
 
     # Three-stage training
-    training.stage1_epochs = 20       # pretrain attention + lightweight head
+    training.stage1_epochs = 10       # pretrain attention + lightweight head
     training.stage1_lr = 1e-3
-    training.stage2_epochs = 10       # freeze attention, deep supervision
-    training.stage2_lr = 1e-3
-    training.aux_weights = (0.4, 0.2, 0.1)  # per decoder block aux loss weights
+    training.stage2_epochs = 0        # (removed, kept for compat)
+    training.stage2_lr = 3e-4
+    training.aux_weights = (0.5, 0.25, 0.125)  # exponential decay per decoder
     training.aux_decay_epochs = 10    # linear decay to 0 during stage 3
+    training.warmup_epochs = 5        # linear warmup before cosine annealing
+    training.weight_decay = 1e-4      # AdamW weight decay
 
     # model configs
     config.model = model = ml_collections.ConfigDict()

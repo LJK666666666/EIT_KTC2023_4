@@ -60,3 +60,7 @@ python scripts/generate_data.py --num-images 400 --workers 4 --start-idx 0 --mea
 
 给 @scripts\train.py 添加训练集/验证集/测试集的8:1:1划分，并且使用验证集损失调度学习率和早停。将Adam优化器改成AdamW。
 
+将训练阶段的阶段一缩减至10个epoch，移除阶段二（冻结注意力层），直接进入阶段三（解冻全参数训练）。
+
+由于训练收敛速度太慢，请结合 @update11.md 中的思路帮我改进优化一下。
+
