@@ -38,12 +38,14 @@ _DOMAIN_RADIUS_PX = int(0.098 / _PIX_WIDTH)  # ~109
 
 # Number of inclusions: 1~5 with specified probabilities
 _N_INCLUSIONS_CHOICES = [1, 2, 3, 4, 5]
-_N_INCLUSIONS_PROBS = [0.15, 0.30, 0.30, 0.15, 0.10]
+# _N_INCLUSIONS_PROBS = [0.15, 0.30, 0.30, 0.15, 0.10]
+_N_INCLUSIONS_PROBS = [0.30, 0.35, 0.15, 0.15, 0.05]
 
 # Shape types and their default probabilities
 SHAPE_TYPES = ['polygon', 'circle', 'rectangle', 'wavy', 'angular', 'star',
                'blob']
-SHAPE_PROBS = [0.20, 0.10, 0.05, 0.25, 0.15, 0.10, 0.15]
+# SHAPE_PROBS = [0.20, 0.10, 0.05, 0.25, 0.15, 0.10, 0.15]
+SHAPE_PROBS = [0.05, 0.30, 0.10, 0.15, 0.20, 0.10, 0.10]
 
 # Contour sampling resolution
 _N_CONTOUR_PTS = 128

@@ -78,7 +78,8 @@ def append_to_h5(h5_file, key, data, dtype):
         h5_file.create_dataset(
             key, data=data.astype(dtype),
             maxshape=(None, *item_shape),
-            chunks=chunk_shape)
+            chunks=chunk_shape,
+            compression='lzf')
 
 
 def choose_chunk_shape(item_shape, dtype, total_len,
@@ -113,6 +114,7 @@ def prepare_dataset(h5_file, key, total_count, item_shape, dtype):
         dtype=dtype,
         maxshape=(None, *item_shape),
         chunks=chunk_shape,
+        compression='lzf',
     )
     return ds, 0
 

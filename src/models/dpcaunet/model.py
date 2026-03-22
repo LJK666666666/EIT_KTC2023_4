@@ -302,13 +302,24 @@ class DPCAUNet(nn.Module):
             DecoderBlock(dec_channels[-1], encoder_channels[0],
                          encoder_channels[0]))
 
-        # 9. Output head
+        # 9. Output head (main)
         self.output_head = nn.Sequential(
             nn.Conv2d(encoder_channels[0], encoder_channels[0], 3, padding=1),
             nn.BatchNorm2d(encoder_channels[0]),
             nn.GELU(),
             nn.Conv2d(encoder_channels[0], out_channels, 1),
         )
+
+        # 10. Stage-1 pretrain head: 1x1 conv from d_model → out_channels
+        self.pretrain_head = nn.Conv2d(d_model, out_channels, 1)
+
+        # 11. Auxiliary heads for deep supervision (one per decoder block)
+        self.aux_heads = nn.ModuleList()
+        # Decoder outputs: dec_channels[1], dec_channels[2], ..., enc[0]
+        # i.e. reversed encoder_channels without first + encoder_channels[0]
+        aux_ch_list = list(reversed(encoder_channels))[1:] + [encoder_channels[0]]
+        for ch in aux_ch_list:
+            self.aux_heads.append(nn.Conv2d(ch, out_channels, 1))
 
     def _timestep_embedding(self, timesteps, dim):
         """Sinusoidal timestep embedding (same as FCUNet)."""
@@ -334,43 +345,53 @@ class DPCAUNet(nn.Module):
         # A channel is active if it has at least one non-zero measurement
         return x.abs().sum(dim=-1) > 0  # (B, 31)
 
-    def forward(self, measurements, level):
-        """
-        Args:
-            measurements: (B, 2356) flattened voltage differences
-                          (vincl masking already applied by trainer/pipeline).
-            level: (B,) difficulty level (1-7).
-
-        Returns:
-            (B, 3, 256, 256) logits for 3-class segmentation.
-        """
+    def _attention_forward(self, measurements, level):
+        """Shared attention + level embedding, returns feature map (B, d, H, W)."""
         B = measurements.shape[0]
 
-        # --- 1. Build electrode input: (B, 31, 78) ---
         x = measurements.view(B, self.n_channels, self.n_patterns)
         cos_enc = self.electrode_cos.view(1, -1, 1).expand(B, -1, -1)
         sin_enc = self.electrode_sin.view(1, -1, 1).expand(B, -1, -1)
-        x = torch.cat([x, cos_enc, sin_enc], dim=-1)  # (B, 31, 78)
+        x = torch.cat([x, cos_enc, sin_enc], dim=-1)
 
         K, V = self.electrode_encoder(x)
-
-        # --- 2. Channel mask (from vincl masking) ---
-        channel_mask = self._build_channel_mask(measurements)  # (B, 31)
-
-        # --- 3. Spatial queries ---
+        channel_mask = self._build_channel_mask(measurements)
         Q = self.spatial_query(B)
 
-        # --- 4. Masked cross-attention → feature map ---
         feat = self.cross_attn(Q, K, V, mask=channel_mask)
         feat = feat.view(B, self.im_size, self.im_size,
                          self.d_model).permute(0, 3, 1, 2)
 
-        # --- 5. Level embedding (additive) ---
         level_emb = self._timestep_embedding(level, self.d_model)
         level_emb = self.level_embed(level_emb)
         feat = feat + level_emb[:, :, None, None]
+        return feat
 
-        # --- 6. UNet ---
+    def forward_pretrain(self, measurements, level):
+        """Stage 1: attention module + lightweight 1x1 head only.
+
+        Returns:
+            (B, 3, 256, 256) coarse logits.
+        """
+        feat = self._attention_forward(measurements, level)
+        return self.pretrain_head(feat)
+
+    def forward(self, measurements, level, deep_supervision=False):
+        """
+        Args:
+            measurements: (B, 2356) flattened voltage differences.
+            level: (B,) difficulty level (1-7).
+            deep_supervision: If True, also return auxiliary outputs from
+                each decoder block (for stages 2-3).
+
+        Returns:
+            If deep_supervision=False: (B, 3, 256, 256) main logits.
+            If deep_supervision=True:  (main_logits, [aux1, aux2, ...])
+                where each aux_i is upsampled to (B, 3, 256, 256).
+        """
+        feat = self._attention_forward(measurements, level)
+
+        # UNet
         x0 = self.initial_conv(feat)
 
         skips = [x0]
@@ -382,7 +403,19 @@ class DPCAUNet(nn.Module):
         h = self.bottleneck(h)
 
         skips = skips[:-1]
-        for dec in self.decoders:
+        aux_outputs = []
+        for i, dec in enumerate(self.decoders):
             h = dec(h, skips.pop())
+            if deep_supervision:
+                aux_logits = self.aux_heads[i](h)
+                if aux_logits.shape[2:] != (self.im_size, self.im_size):
+                    aux_logits = F.interpolate(
+                        aux_logits, (self.im_size, self.im_size),
+                        mode='bilinear', align_corners=False)
+                aux_outputs.append(aux_logits)
 
-        return self.output_head(h)
+        main_out = self.output_head(h)
+
+        if deep_supervision:
+            return main_out, aux_outputs
+        return main_out

@@ -149,15 +149,18 @@ def generate_data(level, num_images, output_dir='dataset',
     if h5_file is not None:
         n_meas = Uelref.shape[0]
         h5_gt = h5_file.create_dataset(
-            'gt', shape=(num_images, 256, 256), dtype='float32')
+            'gt', shape=(num_images, 256, 256), dtype='uint8',
+            chunks=(1, 256, 256), compression='lzf')
         h5_meas = None
         if do_meas:
             h5_meas = h5_file.create_dataset(
-                'measurements', shape=(num_images, n_meas), dtype='float64')
+                'measurements', shape=(num_images, n_meas), dtype='float64',
+                chunks=(1, n_meas), compression='lzf')
         h5_reco = None
         if do_reco:
             h5_reco = h5_file.create_dataset(
-                'reco', shape=(num_images, 5, 256, 256), dtype='float32')
+                'reco', shape=(num_images, 5, 256, 256), dtype='float32',
+                chunks=(1, 5, 256, 256), compression='lzf')
 
     # Per-step timing records
     timing = {
@@ -204,7 +207,7 @@ def generate_data(level, num_images, output_dir='dataset',
         # Save gt and measurements
         t0 = time.time()
         if h5_file is not None:
-            h5_gt[i] = sigma_pix.astype(np.float32)
+            h5_gt[i] = sigma_pix.astype(np.uint8)
             if do_meas and h5_meas is not None:
                 h5_meas[i] = Uel_noisy.flatten()
         else:
@@ -243,7 +246,9 @@ def generate_data(level, num_images, output_dir='dataset',
     # Close HDF5 file if open
     if h5_file is not None:
         h5_file.close()
-        print(f'  HDF5 saved to: {os.path.join(base_path, "data.h5")}')
+        h5_path = os.path.join(base_path, 'data.h5')
+        print(f'  HDF5 saved to: {h5_path}')
+        _update_dataset_info(base_path, h5_path)
 
     # Print timing summary
     avg_total = np.mean(timing['total'])
@@ -354,7 +359,7 @@ def _generate_one_sample(solver, mesh, z, reconstructor, alphas,
         ]
         reco = np.stack(sigma_images)  # (5, 256, 256)
 
-    return sigma_pix, meas, reco
+    return sigma_pix.astype(np.uint8), meas, reco
 
 
 def _init_solver_and_reco(level, ref_path, mesh_name, use_gpu,
@@ -475,8 +480,43 @@ def _mp_worker_chunked(kwargs):
     return {'worker_id': worker_id, 'num_chunks': chunk_idx}
 
 
+def _update_dataset_info(base_path, h5_path):
+    """Write/update dataset_info.yaml with HDF5 dataset metadata."""
+    import h5py
+    from datetime import datetime
+
+    info_path = os.path.join(base_path, 'dataset_info.yaml')
+
+    datasets = {}
+    with h5py.File(h5_path, 'r') as f:
+        for key in f:
+            ds = f[key]
+            datasets[key] = {
+                'shape': list(ds.shape),
+                'dtype': str(ds.dtype),
+            }
+        # Use the first dataset's length as num_samples
+        first_key = list(f.keys())[0]
+        num_samples = f[first_key].shape[0]
+
+    info = {
+        'h5_path': os.path.basename(h5_path),
+        'num_samples': int(num_samples),
+        'datasets': datasets,
+        'updated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+    }
+
+    import yaml
+    with open(info_path, 'w') as f:
+        yaml.dump(info, f, default_flow_style=False, sort_keys=False)
+    print(f'  dataset_info.yaml updated: {num_samples} samples')
+
+
 def _merge_batches_to_hdf5(base_path):
-    """Merge .npz batch files from _batches/ into data.h5, then clean up."""
+    """Merge .npz batch files from _batches/ into data.h5, then clean up.
+
+    Uses append mode ('a') so that multiple runs accumulate data.
+    """
     import glob as _glob
     import h5py
 
@@ -488,7 +528,7 @@ def _merge_batches_to_hdf5(base_path):
         print(f'  No batch files found in {batch_dir}')
         return
 
-    with h5py.File(h5_path, 'w') as h5f:
+    with h5py.File(h5_path, 'a') as h5f:
         for bf in tqdm(batch_files, desc='Merging to HDF5'):
             data = np.load(bf)
             for key in data.files:
@@ -497,22 +537,33 @@ def _merge_batches_to_hdf5(base_path):
                     h5f.create_dataset(
                         key, data=arr,
                         maxshape=(None, *arr.shape[1:]),
-                        chunks=(1, *arr.shape[1:]))
+                        chunks=(1, *arr.shape[1:]),
+                        compression='lzf')
                 else:
                     ds = h5f[key]
                     old_len = ds.shape[0]
                     ds.resize(old_len + arr.shape[0], axis=0)
                     ds[old_len:] = arr
+            data.close()  # release file handle before cleanup
 
-    # Clean up batch files
+    # Clean up batch files (retry on Windows where handles linger)
     import shutil
-    shutil.rmtree(batch_dir)
+    import time
+    for attempt in range(5):
+        try:
+            shutil.rmtree(batch_dir)
+            break
+        except PermissionError:
+            time.sleep(1)
+    else:
+        print(f'  Warning: could not remove {batch_dir}, delete manually.')
 
-    # Print summary
+    # Print summary and update dataset_info.yaml
     with h5py.File(h5_path, 'r') as f:
         for k, v in f.items():
             print(f'  {k}: {v.shape} ({v.dtype})')
     print(f'  HDF5 saved to: {h5_path}')
+    _update_dataset_info(base_path, h5_path)
 
 
 def _mp_generate_chunk(kwargs):
@@ -563,6 +614,14 @@ def main():
         if args.workers > 1 and not args.gpu:
             # Multiprocess: chunked workers → .npz batches → merge to .h5
             from concurrent.futures import ProcessPoolExecutor
+            import shutil as _shutil
+
+            # Clean up stale _batches/ from a previous failed run
+            base_path = os.path.join(args.output_dir, f'level_{level}')
+            stale_dir = os.path.join(base_path, '_batches')
+            if os.path.exists(stale_dir):
+                _shutil.rmtree(stale_dir, ignore_errors=True)
+
             n = args.num_images
             w = args.workers
             samples_per_worker = n // w

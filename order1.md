@@ -51,3 +51,16 @@ python scripts/data_scaling_experiment.py --train-sizes 100 --batch-size 8 --max
 
 python scripts/generate_data.py --num-images 0 --workers 8 --output-dir ../drive/MyDrive/dataset --start-idx 0 --measurements-only
 
+python scripts/generate_data.py --num-images 400 --workers 4 --start-idx 0 --measurements-only
+20s
+
+python scripts/generate_data.py --num-images 800 --workers 2 --start-idx 0 --measurements-only
+python scripts/generate_data.py --num-images 800 --workers 2 --start-idx 0 --measurements-only --sys-bias none --output-dir dataset_sim
+python scripts/train.py --method dpcaunet --batch-size 8 --hdf5-path dataset/level_1/data.h5
+python scripts/train.py --method dpcaunet --batch-size 8 --hdf5-path dataset_sim/level_1/data.h5
+python scripts/train.py --method hcdpcaunet --batch-size 8 --hdf5-path dataset/level_1/data.h5
+5578mb
+python scripts/evaluate_all.py --methods dpcaunet --weights-dir results\dpcaunet_baseline_3
+
+
+

@@ -47,7 +47,8 @@ def parse_args():
         description='Train KTC2023 EIT reconstruction models')
 
     parser.add_argument('--method', type=str, required=True,
-                        choices=['fcunet', 'postp', 'condd', 'dpcaunet'],
+                        choices=['fcunet', 'postp', 'condd', 'dpcaunet',
+                                 'hcdpcaunet'],
                         help='Training method')
     parser.add_argument('--level', type=int, default=1,
                         help='Difficulty level for CondD (1-7)')
@@ -63,6 +64,10 @@ def parse_args():
     parser.add_argument('--hdf5-path', type=str, default=None,
                         help='Path to HDF5 training data file '
                              '(enables HDF5 mode)')
+
+    # Data split
+    parser.add_argument('--split-ratio', type=str, default='8:1:1',
+                        help='Train:Val:Test ratio (default: 8:1:1)')
 
     # Resume
     parser.add_argument('--resume', type=str, default=None,
@@ -120,6 +125,15 @@ def main():
         _apply_overrides(config, args)
         trainer = DPCAUNetTrainer(config=config, experiment_name=name)
 
+    elif args.method == 'hcdpcaunet':
+        from src.configs import get_hcdpcaunet_config
+        from src.trainers import HCDPCAUNetTrainer
+
+        config = get_hcdpcaunet_config()
+        name = args.experiment_name or 'hcdpcaunet_baseline'
+        _apply_overrides(config, args)
+        trainer = HCDPCAUNetTrainer(config=config, experiment_name=name)
+
     else:
         print(f'Unknown method: {args.method}')
         sys.exit(1)
@@ -128,12 +142,60 @@ def main():
     seed = args.seed if args.seed is not None else config.seed
     set_seed(seed)
 
+    # ---- Data split ----
+    _apply_data_split(config, args, seed)
+
     print(f'Method: {args.method}')
     print(f'Device: {trainer.device}')
     print(f'Seed: {seed}')
 
     # ---- Train ----
     trainer.train()
+
+
+def _apply_data_split(config, args, seed):
+    """Apply train/val/test split based on --split-ratio and dataset size."""
+    use_hdf5 = config.data.get('use_hdf5', False)
+    if not use_hdf5:
+        return  # npy mode uses directory listing, split not applicable
+
+    # Already has explicit indices set (e.g. from resume)
+    if config.data.get('train_indices', None) is not None:
+        return
+
+    # Parse ratio
+    parts = [float(x) for x in args.split_ratio.split(':')]
+    total_ratio = sum(parts)
+    train_r = parts[0] / total_ratio
+    val_r = parts[1] / total_ratio if len(parts) > 1 else 0.0
+
+    # Read dataset size from HDF5
+    import h5py
+    if not os.path.exists(config.data.hdf5_path):
+        print(f'Warning: HDF5 file not found: {config.data.hdf5_path}, '
+              f'skipping data split')
+        return
+    with h5py.File(config.data.hdf5_path, 'r') as f:
+        n_total = f['gt'].shape[0]
+
+    # Shuffle indices with fixed seed (reproducible across resumes)
+    rng = np.random.RandomState(seed)
+    indices = rng.permutation(n_total).tolist()
+
+    n_train = int(n_total * train_r)
+    n_val = int(n_total * val_r)
+
+    train_idx = indices[:n_train]
+    val_idx = indices[n_train:n_train + n_val]
+    test_idx = indices[n_train + n_val:]
+
+    config.data.train_indices = train_idx
+    config.data.val_indices = val_idx if val_idx else None
+    config.data.test_indices = test_idx if test_idx else None
+
+    print(f'Data split ({args.split_ratio}): '
+          f'train={len(train_idx)}, val={len(val_idx)}, '
+          f'test={len(test_idx)}, total={n_total}')
 
 
 def _apply_overrides(config, args):

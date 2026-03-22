@@ -205,7 +205,6 @@ class FCUNetHDF5Dataset(Dataset):
     def __init__(self, h5_path, Uref, InvLn,
                  indices=None, augment_noise=True):
         import h5py
-        self._h5py = h5py
 
         self.h5_path = h5_path
         self.Uref = Uref
@@ -223,7 +222,8 @@ class FCUNetHDF5Dataset(Dataset):
 
     def _open_h5(self):
         if self._h5_file is None:
-            self._h5_file = self._h5py.File(self.h5_path, 'r')
+            import h5py
+            self._h5_file = h5py.File(self.h5_path, 'r')
         return self._h5_file
 
     def __len__(self):
@@ -276,7 +276,6 @@ class SimHDF5Dataset(Dataset):
 
     def __init__(self, h5_path, level, indices=None):
         import h5py
-        self._h5py = h5py
 
         self.h5_path = h5_path
         self.level = level
@@ -291,7 +290,8 @@ class SimHDF5Dataset(Dataset):
 
     def _open_h5(self):
         if self._h5_file is None:
-            self._h5_file = self._h5py.File(self.h5_path, 'r')
+            import h5py
+            self._h5_file = h5py.File(self.h5_path, 'r')
         return self._h5_file
 
     def __len__(self):

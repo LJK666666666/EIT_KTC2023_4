@@ -457,3 +457,102 @@ print(sum(p.numel() for p in m.parameters()))
 "
 40,701,699
 
+● 因为你没有加 --all-levels 参数，所以只生成了默认的 level 1。
+                              
+  # 生成全部 7 个 level
+  python scripts/generate_data.py --all-levels --num-images 200 --workers 4 --start-idx 0 --measurements-only                                                                   
+  # 或者只指定某个 level                                                                                                                                                     
+  python scripts/generate_data.py --level 3 --num-images 200 --workers 4 --start-idx 0 --measurements-only                                                                   
+  
+  不过对于 FCUNet 和 DPCA-UNet，其实只需要 level 1 的数据就够了——训练时通过 vincl 掩码随机模拟不同 level 的电极缺失。--all-levels 主要是给 PostP 和 CondD
+  用的，因为它们需要每个 level 单独的线性化重建结果作为输入。
+
+python -c "
+import os, yaml
+from scripts.generate_data import _update_dataset_info
+
+# Create a test h5
+import h5py, numpy as np, tempfile
+tmp = tempfile.mkdtemp()
+h5_path = os.path.join(tmp, 'data.h5')
+with h5py.File(h5_path, 'w') as f:
+    f.create_dataset('gt', data=np.zeros((150, 256, 256), dtype=np.float32))
+    f.create_dataset('measurements', data=np.zeros((150, 2356), dtype=np.float32))
+
+_update_dataset_info(tmp, h5_path)
+
+# Read back
+info_path = os.path.join(tmp, 'dataset_info.yaml')
+with open(info_path) as f:
+    info = yaml.safe_load(f)
+print(yaml.dump(info, default_flow_style=False, sort_keys=False))
+
+# Clean up
+import shutil
+shutil.rmtree(tmp)
+"
+
+
+python scripts/generate_data.py --num-images 800 --workers 2 --start-idx 0 --measurements-only
+Systematic bias loaded: data/systematic_bias.npy (mean=-1.7793e-04, std=3.8047e-02)
+Using 2 workers for level 1 (400 samples/worker, chunk_size=1000)...
+                                                                                                                                                 Level 1: 800 samples in 67.9s (85 ms/sample throughput)
+Merging to HDF5: 100%|█████████████████████████████████████████████████████████████████████████████████████████████| 2/2 [00:00<00:00,  8.67it/s]
+  Warning: could not remove dataset\level_1\_batches, delete manually.
+  gt: (800, 256, 256) (float32)
+  measurements: (800, 2356) (float64)
+  HDF5 saved to: dataset\level_1\data.h5
+  dataset_info.yaml updated: 800 samples
+Data generation complete.
+
+
+  ┌───────────────┬────────────┬──────────────────┐
+  │     方案      │ 每样本大小 │   读取代码改动   │
+  ├───────────────┼────────────┼──────────────────┤
+  │ float32（旧） │ 256 KB     │ —                │
+  ├───────────────┼────────────┼──────────────────┤
+  │ uint8 无压缩  │ 64 KB      │ —                │
+  ├───────────────┼────────────┼──────────────────┤
+  │ 2-bit 打包    │ 16 KB      │ 需要 pack/unpack │
+  ├───────────────┼────────────┼──────────────────┤
+  │ uint8 + gzip  │ 1.2 KB     │ 无需改动         │
+  └───────────────┴────────────┴──────────────────┘
+
+     Method         Size      Write  Rand Read   Seq Read
+     ..........     (KB)   (ms/smp)   (ms/smp)   (ms/smp)
+     ----------------------------------------------------
+     raw          32032      0.040      0.017      0.015
+     gzip-1         637      0.089      0.045          -
+     gzip-4         475      0.208      0.103      0.097
+     gzip-9         277      2.199      0.078          -
+     lzf           1020      0.044      0.064      0.064
+
+
+
+● 当前模型 4.1M 参数。可以调的旋钮和效果：
+
+  ┌──────────────────┬──────────────┬────────────────────────────────────────────────────┐
+  │       参数       │    当前值    │                        影响                        │
+  ├──────────────────┼──────────────┼────────────────────────────────────────────────────┤
+  │ d_model          │ 64           │ 注意力维度，影响全局。64→128 约 4x 参数量          │
+  ├──────────────────┼──────────────┼────────────────────────────────────────────────────┤
+  │ n_heads          │ 4            │ 注意力头数，需整除 d_model。影响表达力但不增加参数 │
+  ├──────────────────┼──────────────┼────────────────────────────────────────────────────┤
+  │ encoder_channels │ (64,128,256) │ UNet 层数和宽度。加层加宽都增参数                  │
+  └──────────────────┴──────────────┴────────────────────────────────────────────────────┘
+
+  推荐组合（按规模排列）：
+
+  # ~4M (当前)
+  d_model=64, encoder_channels=(64,128,256)
+
+  # ~10M
+  d_model=96, encoder_channels=(96,192,384)
+
+  # ~16M
+  d_model=128, encoder_channels=(128,256,512)
+
+  # ~25M (加深一层)
+  d_model=128, encoder_channels=(128,256,512,512)
+
+  通过命令行调整的话，需要把这些参数暴露到 CLI。要我加一下吗？还是你直接改 src/configs/dpcaunet_config.py 里的值？

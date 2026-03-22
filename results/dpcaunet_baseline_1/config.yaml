@@ -1,0 +1,54 @@
+data:
+  dataset_base_path: dataset/level_1
+  hdf5_path: dataset/level_1/data.h5
+  im_size: 256
+  mesh_name: Mesh_dense.mat
+  noise_std1: 0.05
+  noise_std2: 0.01
+  ref_path: KTC2023/Codes_Python/TrainingData/ref.mat
+  test_indices: null
+  train_indices: null
+  use_hdf5: true
+  val_indices: null
+device: cuda
+model:
+  d_model: 64
+  encoder_channels: !!python/tuple
+  - 64
+  - 128
+  - 256
+  max_period: 0.25
+  n_channels: 31
+  n_heads: 4
+  n_patterns: 76
+  out_channels: 3
+seed: 1
+training:
+  aux_decay_epochs: 10
+  aux_weights: !!python/tuple
+  - 0.4
+  - 0.2
+  - 0.1
+  batch_size: 8
+  early_stopping_patience: 15
+  epochs: 500
+  fixed_level: null
+  grad_clip_norm: 1.0
+  log_freq: 50
+  lr: 0.0003
+  max_iters: null
+  num_workers: 8
+  pin_memory: true
+  resume_from: null
+  save_freq: 5
+  scheduler_factor: 0.7
+  scheduler_patience: 3
+  stage1_epochs: 20
+  stage1_lr: 0.0003
+  stage2_epochs: 10
+  stage2_lr: 0.0003
+  val_freq: 1
+validation:
+  data_dir: KTC2023/Codes_Python/TrainingData
+  gt_dir: KTC2023/Codes_Python/GroundTruths
+  num_val_images: 4

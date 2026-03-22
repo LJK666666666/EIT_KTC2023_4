@@ -16,6 +16,14 @@ def get_configs():
     training.log_freq = 50
     training.num_workers = 8
 
+    # Three-stage training
+    training.stage1_epochs = 20       # pretrain attention + lightweight head
+    training.stage1_lr = 3e-4
+    training.stage2_epochs = 10       # freeze attention, deep supervision
+    training.stage2_lr = 3e-4
+    training.aux_weights = (0.4, 0.2, 0.1)  # per decoder block aux loss weights
+    training.aux_decay_epochs = 10    # linear decay to 0 during stage 3
+
     # model configs
     config.model = model = ml_collections.ConfigDict()
     model.n_channels = 31          # differential measurement channels
