@@ -12,15 +12,15 @@ def get_configs():
     config.training = training = get_base_training_config()
     training.batch_size = 6
     training.epochs = 500
-    training.lr = 3e-4
+    training.lr = 2e-3
     training.log_freq = 50
     training.num_workers = 8
 
     # Three-stage training
     training.stage1_epochs = 20
-    training.stage1_lr = 3e-4
+    training.stage1_lr = 1e-3
     training.stage2_epochs = 10
-    training.stage2_lr = 3e-4
+    training.stage2_lr = 5e-4
     training.aux_weights = (0.4, 0.2, 0.1, 0.05)  # 4 decoder blocks
     training.aux_decay_epochs = 10
 

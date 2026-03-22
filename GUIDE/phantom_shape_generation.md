@@ -10,11 +10,11 @@ Each phantom randomly contains 1-5 inclusions, with the following probability di
 
 | Count | Probability |
 |-------|-------------|
-| 1     | 15%         |
-| 2     | 30%         |
-| 3     | 30%         |
+| 1     | 30%         |
+| 2     | 35%         |
+| 3     | 15%         |
 | 4     | 15%         |
-| 5     | 10%         |
+| 5     |  5%         |
 
 When the domain space is insufficient for the requested count (collision detection fails after 120 attempts), fewer objects are placed.
 
@@ -24,13 +24,13 @@ Seven contour styles are available, each targeting a different class of physical
 
 | Shape     | Prob | Description |
 |-----------|------|-------------|
-| polygon   | 20%  | 5-8 vertex irregular polygon (legacy style, moderate irregularity and spikiness) |
-| circle    | 10%  | Ellipse with rx/ry independently sampled at 0.7-1.0x of avg_radius |
-| rectangle |  5%  | Axis-aligned rectangle, width and height from half to double avg_radius |
-| wavy      | 25%  | Sinusoidal radial perturbation with 2-5 lobes, optional second harmonic; produces amoeba/droplet shapes |
-| angular   | 15%  | 3-6 vertex polygon with large radius variance (0.45-1.25x); produces sharp, spiky contours |
+| polygon   |  5%  | 5-8 vertex irregular polygon (legacy style, moderate irregularity and spikiness) |
+| circle    | 30%  | Ellipse with rx/ry independently sampled at 0.7-1.0x of avg_radius |
+| rectangle | 10%  | Axis-aligned rectangle, width and height from half to double avg_radius |
+| wavy      | 15%  | Sinusoidal radial perturbation with 2-5 lobes, optional second harmonic; produces amoeba/droplet shapes |
+| angular   | 20%  | 3-6 vertex polygon with large radius variance (0.45-1.25x); produces sharp, spiky contours |
 | star      | 10%  | 3-7 arms with alternating outer (0.8-1.15x) and inner (0.25-0.55x) radii; produces concave star shapes |
-| blob      | 15%  | Multi-harmonic Fourier radius modulation (3-7 harmonics with 1/k amplitude decay); produces natural, organic blobs |
+| blob      | 10%  | Multi-harmonic Fourier radius modulation (3-7 harmonics with 1/k amplitude decay); produces natural, organic blobs |
 
 ### Shape Generation Details
 

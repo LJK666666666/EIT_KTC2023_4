@@ -62,5 +62,10 @@ python scripts/train.py --method hcdpcaunet --batch-size 8 --hdf5-path dataset/l
 5578mb
 python scripts/evaluate_all.py --methods dpcaunet --weights-dir results\dpcaunet_baseline_3
 
-
+python scripts/generate_data.py --num-images 1600 --workers 2 --measurements-only --sys-bias none --output-dir dataset_sim
+168.7s
+python scripts/generate_data.py --num-images 1600 --workers 4 --measurements-only --sys-bias none --output-dir dataset_sim
+101.2s
+python scripts/generate_data.py --num-images 9600 --workers 4 --measurements-only --sys-bias none --output-dir dataset_sim
+max35%
 

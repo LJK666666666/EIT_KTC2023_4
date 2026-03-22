@@ -1,0 +1,15 @@
+h5_path: data.h5
+num_samples: 12800
+datasets:
+  gt:
+    shape:
+    - 12800
+    - 256
+    - 256
+    dtype: float32
+  measurements:
+    shape:
+    - 12800
+    - 2356
+    dtype: float64
+updated_at: '2026-03-22 20:53:16'
