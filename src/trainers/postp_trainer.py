@@ -140,8 +140,9 @@ class PostPTrainer(BaseTrainer):
         level = level.to(self.device)
 
         self.optimizer.zero_grad()
-        pred = self.model(reco, level)
-        loss = self.loss_fn(pred, gt_onehot)
+        with self._autocast_context():
+            pred = self.model(reco, level)
+            loss = self.loss_fn(pred, gt_onehot)
 
         loss.backward()
         grad_clip = self.config.training.get('grad_clip_norm', 1.0)
@@ -173,8 +174,9 @@ class PostPTrainer(BaseTrainer):
                 dtype=torch.float32, device=self.device)
 
             with torch.no_grad():
-                pred = self.model(c_val, level_inp)
-                loss = self.loss_fn(pred, gt_onehot)
+                with self._autocast_context():
+                    pred = self.model(c_val, level_inp)
+                    loss = self.loss_fn(pred, gt_onehot)
             total_loss += loss.item()
 
         avg_loss = total_loss / 7

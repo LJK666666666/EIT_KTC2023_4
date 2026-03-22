@@ -221,17 +221,19 @@ class DPCAUNetTrainer(BaseTrainer):
         self.optimizer.zero_grad()
 
         if self.training_stage == 1:
-            pred = self.model.forward_pretrain(y, levels_tensor)
-            loss = self.loss_fn(pred, gt)
+            with self._autocast_context():
+                pred = self.model.forward_pretrain(y, levels_tensor)
+                loss = self.loss_fn(pred, gt)
         elif self.training_stage in (2, 3):
-            main_out, aux_outs = self.model(
-                y, levels_tensor, deep_supervision=True)
-            loss = self.loss_fn(main_out, gt)
-            for i, aux in enumerate(aux_outs):
-                if i < len(self._aux_weights):
-                    w = self._aux_weights[i]
-                    if w > 0:
-                        loss = loss + w * self.loss_fn(aux, gt)
+            with self._autocast_context():
+                main_out, aux_outs = self.model(
+                    y, levels_tensor, deep_supervision=True)
+                loss = self.loss_fn(main_out, gt)
+                for i, aux in enumerate(aux_outs):
+                    if i < len(self._aux_weights):
+                        w = self._aux_weights[i]
+                        if w > 0:
+                            loss = loss + w * self.loss_fn(aux, gt)
 
         loss.backward()
         grad_clip = self.config.training.get('grad_clip_norm', 1.0)
@@ -259,8 +261,9 @@ class DPCAUNetTrainer(BaseTrainer):
             gt = gt.to(self.device)
 
             with torch.no_grad():
-                pred = self.model(y, levels_tensor)
-                loss = self.loss_fn(pred, gt)
+                with self._autocast_context():
+                    pred = self.model(y, levels_tensor)
+                    loss = self.loss_fn(pred, gt)
             total_loss += loss.item() * y.shape[0]
             num_samples += y.shape[0]
 

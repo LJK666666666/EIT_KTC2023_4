@@ -135,7 +135,9 @@ class CondDTrainer(BaseTrainer):
             gt = gt.unsqueeze(1)
 
         self.optimizer.zero_grad()
-        loss = self.loss_fn(gt, model=self.model, sde=self.sde, cond_inp=cond)
+        with self._autocast_context():
+            loss = self.loss_fn(
+                gt, model=self.model, sde=self.sde, cond_inp=cond)
         loss.backward()
 
         grad_clip = self.config.training.get('grad_clip_norm', 1.0)
@@ -181,7 +183,8 @@ class CondDTrainer(BaseTrainer):
             },
             device=self.device)
 
-        x_mean = sampler.sample(c_test, logging=False)
+        with self._autocast_context():
+            x_mean = sampler.sample(c_test, logging=False)
 
         # MSE between sampled output and ground truth
         mse_loss = torch.mean(

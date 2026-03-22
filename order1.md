@@ -68,4 +68,4 @@ python scripts/generate_data.py --num-images 1600 --workers 4 --measurements-onl
 101.2s
 python scripts/generate_data.py --num-images 9600 --workers 4 --measurements-only --sys-bias none --output-dir dataset_sim
 max35%
-
+python scripts/train.py --method dpcaunet --batch-size 8 --hdf5-path dataset_sim/level_1/data.h5

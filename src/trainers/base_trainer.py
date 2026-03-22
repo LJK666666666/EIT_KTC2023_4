@@ -11,6 +11,7 @@ Provides the template for all training workflows with:
 """
 
 from abc import ABC, abstractmethod
+from contextlib import nullcontext
 import json
 import os
 import tempfile
@@ -62,6 +63,13 @@ class BaseTrainer(ABC):
         # Early stopping state
         self._es_counter = 0
         self._es_best_val_loss = None
+
+    def _autocast_context(self):
+        """Return autocast context for CUDA bf16 training, else no-op."""
+        precision = self.config.training.get('precision', 'fp32')
+        if self.device == 'cuda' and precision == 'bf16':
+            return torch.autocast(device_type='cuda', dtype=torch.bfloat16)
+        return nullcontext()
 
     @staticmethod
     def _resolve_device(requested):

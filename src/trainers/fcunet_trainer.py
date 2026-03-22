@@ -226,8 +226,9 @@ class FCUNetTrainer(BaseTrainer):
             y = y.to(self.device)
             gt_sum = gt_sum.to(self.device)
 
-            x_pred = self.model.linear_layer(y)
-            loss = torch.mean((x_pred - gt_sum) ** 2)
+            with self._autocast_context():
+                x_pred = self.model.linear_layer(y)
+                loss = torch.mean((x_pred - gt_sum) ** 2)
 
             loss.backward()
             self.init_optimizer.step()
@@ -240,8 +241,9 @@ class FCUNetTrainer(BaseTrainer):
             y = y.to(self.device)
             levels_tensor = levels_tensor.to(self.device)
 
-            pred = self.model(y, levels_tensor)
-            loss = self.loss_fn(pred, gt)
+            with self._autocast_context():
+                pred = self.model(y, levels_tensor)
+                loss = self.loss_fn(pred, gt)
 
             loss.backward()
             grad_clip = self.config.training.get('grad_clip_norm', 1.0)
@@ -275,8 +277,9 @@ class FCUNetTrainer(BaseTrainer):
                 (y_val.shape[0],), level, device=self.device)
 
             with torch.no_grad():
-                pred = self.model(y_val, level_inp)
-                pred_softmax = F.softmax(pred, dim=1)
+                with self._autocast_context():
+                    pred = self.model(y_val, level_inp)
+                    pred_softmax = F.softmax(pred, dim=1)
             pred_argmax = torch.argmax(
                 pred_softmax, dim=1).cpu().numpy()
 
@@ -315,8 +318,9 @@ class FCUNetTrainer(BaseTrainer):
             gt = gt.to(self.device)
 
             with torch.no_grad():
-                pred = self.model(y, levels_tensor)
-                loss = self.loss_fn(pred, gt)
+                with self._autocast_context():
+                    pred = self.model(y, levels_tensor)
+                    loss = self.loss_fn(pred, gt)
             total_loss += loss.item() * y.shape[0]
             num_samples += y.shape[0]
 
@@ -360,8 +364,9 @@ class FCUNetTrainer(BaseTrainer):
                 y = y.to(self.device)
                 gt = gt.to(self.device)
 
-                pred = self.model(y, levels_tensor)
-                loss = self.loss_fn(pred, gt)
+                with self._autocast_context():
+                    pred = self.model(y, levels_tensor)
+                    loss = self.loss_fn(pred, gt)
                 total_loss += loss.item() * y.shape[0]
 
                 pred_argmax = torch.argmax(

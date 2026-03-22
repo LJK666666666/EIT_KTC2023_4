@@ -64,6 +64,9 @@ def parse_args():
     parser.add_argument('--hdf5-path', type=str, default=None,
                         help='Path to HDF5 training data file '
                              '(enables HDF5 mode)')
+    parser.add_argument('--precision', type=str, default=None,
+                        choices=['fp32', 'bf16'],
+                        help='Training precision')
 
     # Data split
     parser.add_argument('--split-ratio', type=str, default='8:1:1',
@@ -148,6 +151,7 @@ def main():
     print(f'Method: {args.method}')
     print(f'Device: {trainer.device}')
     print(f'Seed: {seed}')
+    print(f'Precision: {config.training.precision}')
 
     # ---- Train ----
     trainer.train()
@@ -217,6 +221,8 @@ def _apply_overrides(config, args):
     if args.hdf5_path is not None:
         config.data.use_hdf5 = True
         config.data.hdf5_path = args.hdf5_path
+    if args.precision is not None:
+        config.training.precision = args.precision
 
 
 if __name__ == '__main__':

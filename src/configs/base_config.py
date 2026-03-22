@@ -8,6 +8,7 @@ def get_base_training_config():
     training.max_iters = None        # if set, stop after N iterations (quick test)
     training.num_workers = 4
     training.pin_memory = True
+    training.precision = 'bf16'     # fp32 | bf16
     training.val_freq = 1            # validate every N epochs (0 = disabled)
     training.save_freq = 5           # save last.pt every N epochs
     training.grad_clip_norm = 1.0
