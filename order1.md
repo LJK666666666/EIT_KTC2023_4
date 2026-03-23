@@ -108,3 +108,5 @@ TensorCore Utilization
 │ `TPU_RUNTIME_METRICS_PORTS=8431,8432,8433,8434`?      │
 ╰───────────────────────────────────────────────────────╯
 
+cd EIT_KTC2023_4 && python scripts/train.py --method dpcaunet --batch-size 48 --hdf5-path dataset_sim/level_1/data.h5 --device tpu
+

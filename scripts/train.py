@@ -83,6 +83,8 @@ def parse_args():
                         help='Device (cuda/cpu/tpu)')
     parser.add_argument('--experiment-name', type=str, default=None,
                         help='Experiment name for result directory')
+    parser.add_argument('--result-base-dir', type=str, default=None,
+                        help='Base directory for auto-incremented result dirs')
 
     return parser.parse_args()
 
@@ -152,6 +154,8 @@ def main():
     print(f'Device: {trainer.device}')
     print(f'Seed: {seed}')
     print(f'Precision: {config.training.precision}')
+    if hasattr(config, 'result_base_dir'):
+        print(f'Result base dir: {config.result_base_dir}')
 
     # ---- Train ----
     trainer.train()
@@ -223,6 +227,8 @@ def _apply_overrides(config, args):
         config.data.hdf5_path = args.hdf5_path
     if args.precision is not None:
         config.training.precision = args.precision
+    if args.result_base_dir is not None:
+        config.result_base_dir = args.result_base_dir
 
 
 if __name__ == '__main__':

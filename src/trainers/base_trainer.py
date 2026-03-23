@@ -173,11 +173,13 @@ class BaseTrainer(ABC):
         """Main training entry point."""
         # Set up result directory
         resume_path = self.config.training.get('resume_from', None)
+        base_dir = getattr(self.config, 'result_base_dir', 'results')
         if resume_path:
             # Resume into the same directory as the checkpoint
             self.result_dir = os.path.dirname(resume_path)
         else:
-            self.result_dir = self._create_result_dir(self.experiment_name)
+            self.result_dir = self._create_result_dir(
+                self.experiment_name, base_dir=base_dir)
 
         self.build_model()
         self.build_datasets()
