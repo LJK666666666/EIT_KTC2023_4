@@ -197,7 +197,7 @@ class DPCAUNetTrainer(BaseTrainer):
             batch_size=self.config.training.batch_size,
             shuffle=True,
             drop_last=self._use_static_batches(),
-            pin_memory=self.config.training.pin_memory,
+            pin_memory=self._pin_memory_enabled(),
             num_workers=self.config.training.num_workers)
 
         self.val_sim_loader = None
@@ -219,7 +219,7 @@ class DPCAUNetTrainer(BaseTrainer):
                 batch_size=self.config.training.batch_size,
                 shuffle=False,
                 drop_last=self._use_static_batches(),
-                pin_memory=self.config.training.pin_memory,
+                pin_memory=self._pin_memory_enabled(),
                 num_workers=self.config.training.num_workers)
 
         self.vincl_dict = {}
@@ -329,7 +329,7 @@ class DPCAUNetTrainer(BaseTrainer):
         loss.backward()
         grad_clip = self.config.training.get('grad_clip_norm', 1.0)
         torch.nn.utils.clip_grad_norm_(self.model.parameters(), grad_clip)
-        self.optimizer.step()
+        self.optimizer_step(self.optimizer)
 
         # Step per-iteration scheduler (warmup + cosine)
         if self.scheduler is not None:

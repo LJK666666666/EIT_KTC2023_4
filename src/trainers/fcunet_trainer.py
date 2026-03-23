@@ -129,7 +129,7 @@ class FCUNetTrainer(BaseTrainer):
             batch_size=self.config.training.batch_size,
             shuffle=True,
             drop_last=self._use_static_batches(),
-            pin_memory=self.config.training.pin_memory,
+            pin_memory=self._pin_memory_enabled(),
             num_workers=self.config.training.num_workers)
 
         # Simulated val/test datasets (no noise augmentation, deterministic)
@@ -153,7 +153,7 @@ class FCUNetTrainer(BaseTrainer):
                 batch_size=self.config.training.batch_size,
                 shuffle=False,
                 drop_last=self._use_static_batches(),
-                pin_memory=self.config.training.pin_memory,
+                pin_memory=self._pin_memory_enabled(),
                 num_workers=self.config.training.num_workers)
 
         test_indices = self.config.data.get('test_indices', None)
@@ -173,7 +173,7 @@ class FCUNetTrainer(BaseTrainer):
                 batch_size=self.config.training.batch_size,
                 shuffle=False,
                 drop_last=self._use_static_batches(),
-                pin_memory=self.config.training.pin_memory,
+                pin_memory=self._pin_memory_enabled(),
                 num_workers=self.config.training.num_workers)
 
         # Pre-compute vincl masks for all levels
@@ -240,7 +240,7 @@ class FCUNetTrainer(BaseTrainer):
                 loss = torch.mean((x_pred - gt_sum) ** 2)
 
             loss.backward()
-            self.init_optimizer.step()
+            self.optimizer_step(self.init_optimizer)
         else:
             # Stage 2: CrossEntropy on full model
             self.optimizer.zero_grad()
@@ -257,7 +257,7 @@ class FCUNetTrainer(BaseTrainer):
             loss.backward()
             grad_clip = self.config.training.get('grad_clip_norm', 1.0)
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), grad_clip)
-            self.optimizer.step()
+            self.optimizer_step(self.optimizer)
 
         return {'loss': loss.item()}
 
@@ -459,6 +459,7 @@ class FCUNetTrainer(BaseTrainer):
                 total_loss, num_items = 0.0, 0
                 for idx, batch in pbar:
                     loss_dict = self.train_step(batch)
+                    self.mark_step()
                     batch_size = batch[0].shape[0]
                     total_loss += loss_dict['loss'] * batch_size
                     num_items += batch_size

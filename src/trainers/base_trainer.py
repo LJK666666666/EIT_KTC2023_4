@@ -65,10 +65,12 @@ class BaseTrainer(ABC):
         self._es_best_val_loss = None
 
     def _autocast_context(self):
-        """Return autocast context for CUDA bf16 training, else no-op."""
+        """Return autocast context for bf16 training on CUDA/XLA, else no-op."""
         precision = self.config.training.get('precision', 'fp32')
         if self.device == 'cuda' and precision == 'bf16':
             return torch.autocast(device_type='cuda', dtype=torch.bfloat16)
+        if self._xla and precision == 'bf16':
+            return torch.autocast(device_type='xla', dtype=torch.bfloat16)
         return nullcontext()
 
     @staticmethod
@@ -98,9 +100,20 @@ class BaseTrainer(ABC):
         if self._xla:
             self._xm.mark_step()
 
+    def optimizer_step(self, optimizer):
+        """Step optimizer with XLA-aware execution."""
+        if self._xla:
+            self._xm.optimizer_step(optimizer, barrier=False)
+        else:
+            optimizer.step()
+
     def _use_static_batches(self):
         """Use fixed batch shapes on XLA/TPU to avoid recompilations."""
         return self._xla
+
+    def _pin_memory_enabled(self):
+        """pin_memory is useful for CUDA, but not for XLA/TPU."""
+        return self.config.training.pin_memory and not self._xla
 
     def _warn_if_dropping_last_batch(self, split_name, dataset_len, batch_size):
         """Warn when static batching on XLA drops the final incomplete batch."""
