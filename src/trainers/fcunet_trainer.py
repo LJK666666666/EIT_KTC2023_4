@@ -312,7 +312,9 @@ class FCUNetTrainer(BaseTrainer):
 
     def _validate_sim(self, epoch):
         """Validate on simulated val set: CE loss only (no score computation)."""
-        fixed_level = self.config.training.get('fixed_level', 1)
+        fixed_level = self.config.training.get('fixed_level', None)
+        if fixed_level is None:
+            fixed_level = 1
         total_loss = 0.0
         num_samples = 0
 
@@ -357,7 +359,9 @@ class FCUNetTrainer(BaseTrainer):
         self._load_checkpoint(self._get_eval_checkpoint_path())
         self.model.eval()
 
-        fixed_level = self.config.training.get('fixed_level', 1)
+        fixed_level = self.config.training.get('fixed_level', None)
+        if fixed_level is None:
+            fixed_level = 1
         total_loss = 0.0
         total_score = 0.0
         num_samples = 0
