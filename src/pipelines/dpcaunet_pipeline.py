@@ -70,8 +70,9 @@ class DPCAUNetPipeline(BasePipeline):
             (y_tensor.shape[0],), level, device=self.device)
 
         with torch.no_grad():
-            pred = self.model(y_tensor, level_tensor)
-            pred_softmax = F.softmax(pred, dim=1)
+            with self._autocast_context():
+                pred = self.model(y_tensor, level_tensor)
+                pred_softmax = F.softmax(pred, dim=1)
             pred_argmax = torch.argmax(pred_softmax, dim=1).cpu().numpy()
 
         return [arr.astype(int) for arr in pred_argmax]

@@ -22,6 +22,7 @@ Usage example:
 """
 
 from abc import ABC, abstractmethod
+from contextlib import nullcontext
 import glob
 import numpy as np
 import torch
@@ -45,6 +46,12 @@ class BasePipeline(ABC):
         self.device = device if torch.cuda.is_available() else 'cpu'
         self.weights_base_dir = weights_base_dir
         self.model = None
+
+    def _autocast_context(self):
+        """Use bf16 autocast on CUDA inference when available."""
+        if self.device == 'cuda':
+            return torch.autocast(device_type='cuda', dtype=torch.bfloat16)
+        return nullcontext()
 
     @staticmethod
     def _load_state_dict(path, device='cpu'):

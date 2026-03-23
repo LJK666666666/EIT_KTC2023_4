@@ -592,3 +592,29 @@ Data generation complete.
   - HCDPCAUNet (4 decoder blocks)：(0.5, 0.25, 0.125, 0.0625)
   - 避免低分辨率层强行拟合高频边缘导致梯度冲突
 
+
+
+  所以它到底算哪种
+  我会这样总结：
+
+  - 显存占用的大方向是架构硬成本
+  - 但仍然可以通过实现优化把上限再推一截
+  - 最现实的优化手段不是“手写底层算子”，而是 checkpointing、memory-efficient attention、梯度累积
+
+  如果你现在问“最值得做什么”，优先级我会排成：
+
+  1. activation checkpointing
+  2. 梯度累积
+  3. 检查是否有可裁掉的高分辨率辅助分支
+  4. 再考虑 attention 内存优化
+  5. 最后才是自定义算子
+
+  一句话：
+
+  - 不是纯硬性瓶颈
+  - 但主要矛盾也不是缺一个自定义算子
+  - 最有效的是训练策略和显存友好实现，而不是先手写算子
+
+  如果你要，我可以继续帮你判断：对当前 dpcaunet，哪几处最适合加 activation checkpointing。
+
+

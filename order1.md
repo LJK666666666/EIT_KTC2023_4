@@ -109,4 +109,7 @@ TensorCore Utilization
 ╰───────────────────────────────────────────────────────╯
 
 cd EIT_KTC2023_4 && python scripts/train.py --method dpcaunet --batch-size 48 --hdf5-path dataset_sim/level_1/data.h5 --device tpu
+python scripts/evaluate_all.py --methods dpcaunet --weights-dir results\dpcaunet_baseline_4
+tpu-info
+
 

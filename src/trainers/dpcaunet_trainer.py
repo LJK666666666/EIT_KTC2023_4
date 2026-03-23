@@ -248,10 +248,11 @@ class DPCAUNetTrainer(BaseTrainer):
         """Normalize measurements: (y - mean) / std, keeping zeros at zero."""
         if self._meas_mean is None:
             return y
-        mask = y != 0
-        y_norm = torch.zeros_like(y)
-        y_norm[mask] = (y[mask] - self._meas_mean) / self._meas_std
-        return y_norm
+        # Use torch.where for XLA-compatible static-shape operation
+        return torch.where(
+            y != 0,
+            (y - self._meas_mean) / self._meas_std,
+            y)
 
     def _load_val_data(self):
         gt_dir = self.config.validation.gt_dir

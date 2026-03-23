@@ -102,7 +102,7 @@ def evaluate_method(method_name, pipeline, levels, eval_loader, output_dir,
             elapsed = time.time() - t0
 
             pbar = tqdm(range(len(reconstructions)), total=len(reconstructions),
-                        desc='    Reconstructing', leave=False)
+                        desc='    Scoring', leave=False)
             for i in pbar:
                 if i < len(ground_truths):
                     score = scoring_function(ground_truths[i],
