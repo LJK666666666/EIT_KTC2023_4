@@ -5,6 +5,23 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+def _prepare_targets(targets, num_classes):
+    """Accept class indices (B,H,W) or one-hot targets (B,C,H,W)."""
+    if targets.dim() == 4:
+        if targets.shape[1] != num_classes:
+            raise ValueError(
+                f'One-hot targets must have shape (B, {num_classes}, H, W), '
+                f'got {tuple(targets.shape)}'
+            )
+        return torch.argmax(targets, dim=1)
+    if targets.dim() == 3:
+        return targets
+    raise ValueError(
+        f'Targets must have shape (B, H, W) or (B, C, H, W), '
+        f'got {tuple(targets.shape)}'
+    )
+
+
 class DiceLoss(nn.Module):
     """Soft Dice loss for multi-class segmentation.
 
@@ -23,6 +40,7 @@ class DiceLoss(nn.Module):
             targets: (B, H, W) integer class labels.
         """
         C = logits.shape[1]
+        targets = _prepare_targets(targets, C)
         probs = F.softmax(logits, dim=1)  # (B, C, H, W)
         # One-hot encode targets
         targets_oh = F.one_hot(targets.long(), C)  # (B, H, W, C)
@@ -54,6 +72,7 @@ class FocalLoss(nn.Module):
             logits: (B, C, H, W) raw logits.
             targets: (B, H, W) integer class labels.
         """
+        targets = _prepare_targets(targets, logits.shape[1])
         ce = F.cross_entropy(logits, targets.long(), reduction='none')
         p_t = torch.exp(-ce)  # probability of correct class
         focal_weight = (1.0 - p_t) ** self.gamma
