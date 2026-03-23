@@ -190,10 +190,13 @@ class DPCAUNetTrainer(BaseTrainer):
             dataset = FCUNetTrainingData(
                 Uelref, solver.InvLn, base_path,
                 indices=train_indices, augment_noise=True)
+        self._warn_if_dropping_last_batch(
+            'train', len(dataset), self.config.training.batch_size)
         self.train_loader = DataLoader(
             dataset,
             batch_size=self.config.training.batch_size,
             shuffle=True,
+            drop_last=self._use_static_batches(),
             pin_memory=self.config.training.pin_memory,
             num_workers=self.config.training.num_workers)
 
@@ -209,10 +212,13 @@ class DPCAUNetTrainer(BaseTrainer):
                 val_ds = FCUNetTrainingData(
                     Uelref, solver.InvLn, base_path,
                     indices=val_indices, augment_noise=False)
+            self._warn_if_dropping_last_batch(
+                'val', len(val_ds), self.config.training.batch_size)
             self.val_sim_loader = DataLoader(
                 val_ds,
                 batch_size=self.config.training.batch_size,
                 shuffle=False,
+                drop_last=self._use_static_batches(),
                 pin_memory=self.config.training.pin_memory,
                 num_workers=self.config.training.num_workers)
 

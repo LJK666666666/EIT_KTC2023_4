@@ -98,6 +98,20 @@ class BaseTrainer(ABC):
         if self._xla:
             self._xm.mark_step()
 
+    def _use_static_batches(self):
+        """Use fixed batch shapes on XLA/TPU to avoid recompilations."""
+        return self._xla
+
+    def _warn_if_dropping_last_batch(self, split_name, dataset_len, batch_size):
+        """Warn when static batching on XLA drops the final incomplete batch."""
+        if self._use_static_batches() and dataset_len % batch_size != 0:
+            dropped = dataset_len % batch_size
+            print(
+                f'Warning: {split_name} dataset size {dataset_len} is not '
+                f'divisible by batch_size={batch_size}; '
+                f'drop_last=True will drop {dropped} samples on XLA.'
+            )
+
     # ------------------------------------------------------------------
     # Result directory management
     # ------------------------------------------------------------------
