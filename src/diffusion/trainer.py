@@ -15,7 +15,7 @@ from .sde import SDE, _SCORE_PRED_CLASSES, _EPSILON_PRED_CLASSES
 
 from ..models.openai_unet import OpenAiUNetModel
 from ..samplers import BaseSampler, wrapper_ddim
-from ..ktc_methods import FastScoringFunction
+from ..evaluation.scoring_torch import fast_score_auto
 
 def score_model_simple_trainer(
 	score: OpenAiUNetModel,
@@ -110,8 +110,10 @@ def score_model_simple_trainer(
 
 				mean_score = 0
 				for i in range(x_round.shape[0]):
-					challenge_score = FastScoringFunction(x_test[i, 0, :, :].cpu().numpy(),
-														 x_round[i, 0,:,:].cpu().numpy())
+					challenge_score = fast_score_auto(
+						x_test[i, 0, :, :].cpu().numpy(),
+						x_round[i, 0, :, :].cpu().numpy(),
+						device=device)
 					mean_score += challenge_score
 
 				writer.add_scalar('val/challenge_score', mean_score/4, epoch)

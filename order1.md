@@ -138,4 +138,5 @@ python scripts/train.py --method vq_sae_predictor --hdf5-path dataset_sim/level_
 
 python scripts/visualize_sae_reconstruction.py --weights-dir results/vq_sae_baseline_4
 
+python scripts/evaluate_all.py --methods sae
 

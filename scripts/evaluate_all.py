@@ -25,7 +25,8 @@ from tqdm import tqdm
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.data.eval_dataset import EvaluationDataLoader
-from src.evaluation.scoring import scoring_function
+from src.evaluation.scoring import FastScoringFunction, scoring_function
+from src.evaluation.scoring_torch import TorchFastScorer
 from src.evaluation.visualization import (
     plot_reconstruction_comparison,
     plot_method_overview,
@@ -51,6 +52,33 @@ def get_output_dir(method_name, base_dir='results'):
             os.makedirs(dir_name, exist_ok=True)
             return dir_name
         num += 1
+
+
+def resolve_score_device(device_arg):
+    if device_arg == 'auto':
+        return 'cuda' if __import__('torch').cuda.is_available() else 'cpu'
+    return device_arg
+
+
+def build_scorer(score_mode, score_device):
+    if score_mode == 'official':
+        return {'mode': 'official', 'single_fn': scoring_function, 'batch_obj': None}
+    if score_mode == 'fast':
+        return {'mode': 'fast', 'single_fn': FastScoringFunction, 'batch_obj': None}
+    if score_mode == 'torch':
+        return {
+            'mode': 'torch',
+            'single_fn': None,
+            'batch_obj': TorchFastScorer(device=score_device),
+        }
+    raise ValueError(f'Unknown score mode: {score_mode}')
+
+
+def score_reconstructions(ground_truths, reconstructions, scorer):
+    if scorer['mode'] == 'torch':
+        return scorer['batch_obj'].score_batch(ground_truths, reconstructions)
+    return [scorer['single_fn'](gt, reco)
+            for gt, reco in zip(ground_truths, reconstructions)]
 
 
 def build_pipeline(method_name, device, weights_base_dir, batch_mode,
@@ -91,7 +119,7 @@ def build_pipeline(method_name, device, weights_base_dir, batch_mode,
 
 
 def evaluate_method(method_name, pipeline, levels, eval_loader, output_dir,
-                    save_mat=True, save_plots=True):
+                    scorer, save_mat=True, save_plots=True):
     """Evaluate a single method across the specified levels.
 
     Returns:
@@ -139,15 +167,9 @@ def evaluate_method(method_name, pipeline, levels, eval_loader, output_dir,
             print(f'\n  Level {level}:')
             ground_truths = per_level_inputs[level]['ground_truths']
             reconstructions = per_level_reconstructions[level]
-            scores = []
-
-            pbar = tqdm(range(len(reconstructions)), total=len(reconstructions),
-                        desc='    Scoring', leave=False)
-            for i in pbar:
-                if i < len(ground_truths):
-                    score = scoring_function(ground_truths[i], reconstructions[i])
-                    scores.append(score)
-                    pbar.set_postfix(score=f'{score:.4f}')
+            t_score = time.time()
+            scores = score_reconstructions(ground_truths, reconstructions, scorer)
+            score_elapsed = time.time() - t_score
 
             sum_score = float(np.sum(scores))
             mean_score = float(np.mean(scores)) if scores else 0.0
@@ -165,6 +187,7 @@ def evaluate_method(method_name, pipeline, levels, eval_loader, output_dir,
 
             print(f'    Scores: {[f"{s:.4f}" for s in scores]}')
             print(f'    Sum: {sum_score:.4f}, Mean: {mean_score:.4f}')
+            print(f'    Score time: {score_elapsed:.3f}s')
 
             if save_mat:
                 level_dir = os.path.join(output_dir, f'level_{level}')
@@ -204,15 +227,11 @@ def evaluate_method(method_name, pipeline, levels, eval_loader, output_dir,
                 measurements, ref_data, level)
             elapsed = time.time() - t0
 
-            pbar = tqdm(range(len(reconstructions)), total=len(reconstructions),
-                        desc='    Scoring', leave=False)
-            for i in pbar:
-                if i < len(ground_truths):
-                    score = scoring_function(ground_truths[i],
-                                             reconstructions[i])
-                    scores.append(score)
-                    pbar.set_postfix(score=f'{score:.4f}',
-                                     time=f'{elapsed / len(reconstructions):.1f}s')
+            t_score = time.time()
+            scores = score_reconstructions(ground_truths, reconstructions, scorer)
+            score_elapsed = time.time() - t_score
+            print(f'    Reconstruction time: {elapsed:.3f}s')
+            print(f'    Score time: {score_elapsed:.3f}s')
         else:
             pbar = tqdm(enumerate(measurements), total=len(measurements),
                         desc='    Reconstructing', leave=False)
@@ -222,11 +241,12 @@ def evaluate_method(method_name, pipeline, levels, eval_loader, output_dir,
                 elapsed = time.time() - t0
                 reconstructions.append(reco)
 
-                if i < len(ground_truths):
-                    score = scoring_function(ground_truths[i], reco)
-                    scores.append(score)
-                    pbar.set_postfix(score=f'{score:.4f}',
-                                     time=f'{elapsed:.1f}s')
+                pbar.set_postfix(time=f'{elapsed:.1f}s')
+
+            t_score = time.time()
+            scores = score_reconstructions(ground_truths, reconstructions, scorer)
+            score_elapsed = time.time() - t_score
+            print(f'    Score time: {score_elapsed:.3f}s')
 
         sum_score = float(np.sum(scores))
         mean_score = float(np.mean(scores)) if scores else 0.0
@@ -335,6 +355,11 @@ def main():
                         help='YAML config for sae_dir / sae_predictor_dir')
     parser.add_argument('--vq-sae-config', default='scripts/vq_sae_pipeline.yaml',
                         help='YAML config for vq_sae_dir / vq_sae_predictor_dir')
+    parser.add_argument('--score-mode', default='official',
+                        choices=['official', 'fast', 'torch'],
+                        help='Scoring implementation to use')
+    parser.add_argument('--score-device', default='auto',
+                        help='Device for torch scoring (auto/cpu/cuda)')
     args = parser.parse_args()
 
     eval_loader = EvaluationDataLoader(
@@ -345,6 +370,10 @@ def main():
     all_results = {}
     all_level_data = {}  # For cross-method comparison plots
     output_dirs = {}
+    score_device = resolve_score_device(args.score_device)
+    scorer = build_scorer(args.score_mode, score_device)
+    print(f'Score mode: {args.score_mode}'
+          + (f' ({score_device})' if args.score_mode == 'torch' else ''))
 
     for method in args.methods:
         print(f'\n{"=" * 60}')
@@ -366,6 +395,7 @@ def main():
             levels=args.levels,
             eval_loader=eval_loader,
             output_dir=output_dir,
+            scorer=scorer,
             save_mat=not args.no_mat,
             save_plots=not args.no_plot,
         )

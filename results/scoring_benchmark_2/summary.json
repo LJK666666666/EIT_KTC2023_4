@@ -1,0 +1,60 @@
+{
+  "gt_path": "KTC2023/EvaluationData/GroundTruths/level_1/1_true.mat",
+  "variant": "shift",
+  "device": "cuda",
+  "results": [
+    {
+      "name": "official",
+      "score": 0.9103969382808762,
+      "runs": 1,
+      "mean_ms": 92015.33719999134,
+      "std_ms": 0.0,
+      "min_ms": 92015.33719999134,
+      "max_ms": 92015.33719999134
+    },
+    {
+      "name": "fast_scipy",
+      "score": 0.9103969382808761,
+      "runs": 3,
+      "mean_ms": 127.2792000042197,
+      "std_ms": 1.1530914647174793,
+      "min_ms": 126.2704999971902,
+      "max_ms": 128.89320000249427,
+      "abs_diff_vs_official": 1.1102230246251565e-16,
+      "speedup_vs_official": 722.9408826967858
+    },
+    {
+      "name": "fast_torch_cuda",
+      "score": 0.9103963971138,
+      "runs": 20,
+      "mean_ms": 3.1470199981413316,
+      "std_ms": 0.5377061893392979,
+      "min_ms": 2.4913999950513244,
+      "max_ms": 4.429799999343231,
+      "abs_diff_vs_official": 5.41167076151261e-07,
+      "speedup_vs_official": 29238.87908381158
+    },
+    {
+      "name": "fast_torch_batched_cuda",
+      "score": 0.9103963971138,
+      "runs": 20,
+      "mean_ms": 2.4609999993117526,
+      "std_ms": 0.23028896540934238,
+      "min_ms": 2.1871999924769625,
+      "max_ms": 2.9541000112658367,
+      "abs_diff_vs_official": 5.41167076151261e-07,
+      "speedup_vs_official": 37389.409681318364
+    },
+    {
+      "name": "fast_torch_cached_cuda",
+      "score": 0.9103963971138,
+      "runs": 20,
+      "mean_ms": 2.3177000002760906,
+      "std_ms": 0.251684334995177,
+      "min_ms": 1.9574999896576628,
+      "max_ms": 2.813099999912083,
+      "abs_diff_vs_official": 5.41167076151261e-07,
+      "speedup_vs_official": 39701.14216207025
+    }
+  ]
+}

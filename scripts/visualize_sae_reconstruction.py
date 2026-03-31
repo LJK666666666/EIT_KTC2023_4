@@ -25,6 +25,7 @@ from tqdm import tqdm
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.evaluation.visualization import plot_reconstruction_comparison
+from src.evaluation.scoring_torch import fast_score_auto
 from src.models.sae import SparseAutoEncoder
 from src.models.vq_sae import ST1DVQVAE
 from src.pipelines.base_pipeline import BasePipeline
@@ -245,8 +246,7 @@ def evaluate_group(model, ground_truths, device, desc, batch_size,
         for gt, reco in zip(gt_batch, reco_batch):
             reconstructions.append(reco)
             if compute_score:
-                from src.evaluation.scoring import FastScoringFunction
-                scores.append(float(FastScoringFunction(gt, reco)))
+                scores.append(float(fast_score_auto(gt, reco, device=device)))
     return reconstructions, scores
 
 

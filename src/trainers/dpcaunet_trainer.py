@@ -27,7 +27,6 @@ from .base_trainer import BaseTrainer
 from ..configs.dpcaunet_config import get_configs as get_dpcaunet_config
 from ..models.dpcaunet import DPCAUNet
 from ..data import FCUNetTrainingData
-from ..evaluation.scoring import FastScoringFunction
 from ..losses import DiceFocalLoss
 from ..utils.measurement import create_vincl
 

@@ -1,0 +1,49 @@
+{
+  "gt_path": "KTC2023/EvaluationData/GroundTruths/level_1/1_true.mat",
+  "variant": "shift",
+  "device": "cuda",
+  "results": [
+    {
+      "name": "official",
+      "score": 0.9103969382808762,
+      "runs": 1,
+      "mean_ms": 92757.9689000122,
+      "std_ms": 0.0,
+      "min_ms": 92757.9689000122,
+      "max_ms": 92757.9689000122
+    },
+    {
+      "name": "fast_scipy",
+      "score": 0.9103969382808761,
+      "runs": 5,
+      "mean_ms": 133.8343999988865,
+      "std_ms": 4.876372686888591,
+      "min_ms": 126.09990000783,
+      "max_ms": 139.37289999739733,
+      "abs_diff_vs_official": 1.1102230246251565e-16,
+      "speedup_vs_official": 693.0801714714897
+    },
+    {
+      "name": "fast_torch_cuda",
+      "score": 0.9103963971138,
+      "runs": 10,
+      "mean_ms": 2.944700000807643,
+      "std_ms": 0.4679506320391537,
+      "min_ms": 2.4895000096876174,
+      "max_ms": 4.08249998872634,
+      "abs_diff_vs_official": 5.41167076151261e-07,
+      "speedup_vs_official": 31499.97245035877
+    },
+    {
+      "name": "fast_torch_batched_cuda",
+      "score": 0.9103963971138,
+      "runs": 10,
+      "mean_ms": 2.219709998462349,
+      "std_ms": 0.11200203401740033,
+      "min_ms": 2.1160999895073473,
+      "max_ms": 2.455900001223199,
+      "abs_diff_vs_official": 5.41167076151261e-07,
+      "speedup_vs_official": 41788.32773842892
+    }
+  ]
+}

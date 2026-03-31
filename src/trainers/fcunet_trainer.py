@@ -21,7 +21,7 @@ from .base_trainer import BaseTrainer
 from ..configs import get_fcunet_config
 from ..models.fcunet import FCUNet
 from ..data import FCUNetTrainingData
-from ..evaluation.scoring import FastScoringFunction
+from ..evaluation.scoring_torch import fast_score_batch_auto
 from ..utils.measurement import create_vincl
 
 
@@ -292,11 +292,9 @@ class FCUNetTrainer(BaseTrainer):
             pred_argmax = torch.argmax(
                 pred_softmax, dim=1).cpu().numpy()
 
-            mean_score = 0
-            for i in range(pred_argmax.shape[0]):
-                score = FastScoringFunction(gt_np[i], pred_argmax[i])
-                mean_score += score
-            mean_score /= pred_argmax.shape[0]
+            level_scores = fast_score_batch_auto(
+                gt_np[:pred_argmax.shape[0]], pred_argmax, device=self.device)
+            mean_score = float(np.mean(level_scores)) if level_scores else 0.0
 
             if self.writer is not None:
                 self.writer.add_scalar(
@@ -385,9 +383,9 @@ class FCUNetTrainer(BaseTrainer):
                 pred_argmax = torch.argmax(
                     F.softmax(pred, dim=1), dim=1).cpu().numpy()
                 gt_argmax = torch.argmax(gt, dim=1).cpu().numpy()
-                for i in range(pred_argmax.shape[0]):
-                    total_score += FastScoringFunction(
-                        gt_argmax[i], pred_argmax[i])
+                batch_scores = fast_score_batch_auto(
+                    gt_argmax, pred_argmax, device=self.device)
+                total_score += float(np.sum(batch_scores))
                 num_samples += y.shape[0]
 
         avg_loss = total_loss / max(num_samples, 1)

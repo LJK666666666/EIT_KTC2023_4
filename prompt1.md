@@ -84,3 +84,7 @@ MLP神经网络的误差并不很大，但是效果还是不好，sae_predictor+
 
 这个不是vq_vae吗，为什么叫vq_sae，另外这个新方法如何推理自编码的重建图像与实际图像对比图？比如你将 @scripts/visualize_sae_reconstruction.py 的功能扩展一下？
 
+告诉我 @Subjects Data 中的数据内容
+
+创建一个新脚本对比官方评分方式和加速评分方式
+
