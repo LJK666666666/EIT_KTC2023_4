@@ -131,4 +131,11 @@ python scripts/visualize_sae_reconstruction.py --weights-dir results/sae_predict
 
 python scripts/train.py --method sae_predictor --hdf5-path dataset_sim/level_1/data.h5 --sae-checkpoint results/sae_baseline_3/best.pt --latent-h5-path results/sae_baseline_3/latent_codes.h5 --experiment-name sae_predictor_joint_img
 
+python scripts/train.py --method vq_sae --hdf5-path dataset_sim/level_1/data.h5 --max-iters 2
+python scripts/train.py --method vq_sae --hdf5-path dataset_sim/level_1/data.h5
+python scripts/train.py --method vq_sae_predictor --hdf5-path dataset_sim/level_1/data.h5 --vq-sae-checkpoint results/vq_sae_baseline_3/best.pt --vq-latent-h5-path results/vq_sae_baseline_3/latent_codes.h5 --max-iters 2
+python scripts/train.py --method vq_sae_predictor --hdf5-path dataset_sim/level_1/data.h5 --vq-sae-checkpoint results/vq_sae_baseline_4/best.pt --vq-latent-h5-path results/vq_sae_baseline_4/latent_codes.h5
+
+python scripts/visualize_sae_reconstruction.py --weights-dir results/vq_sae_baseline_4
+
 

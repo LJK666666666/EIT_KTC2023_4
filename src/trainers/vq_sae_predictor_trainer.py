@@ -92,7 +92,7 @@ class VQSAEPredictorTrainer(BaseTrainer):
         Mpat = y_ref['Mpat']
         mesh, mesh2 = load_mesh(self.config.data.mesh_name)
         nel = 32
-        z = 1e-6 * np.ones((nel, 1))
+        z = 1e-6 * np.ones(nel)
         vincl = np.ones((nel - 1, 76), dtype=bool)
         solver = EITFEM(mesh2, Injref, Mpat, vincl)
         solver.SetInvGamma(
@@ -228,4 +228,3 @@ class VQSAEPredictorTrainer(BaseTrainer):
             self.writer.add_scalar('val/angle_loss', metrics['val_angle_loss'], epoch + 1)
         print(f'  Val loss: {metrics["val_loss"]:.6f}')
         return metrics
-
