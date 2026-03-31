@@ -54,25 +54,46 @@ class HCDPCAUNetPipeline(BasePipeline):
                     level: int) -> np.ndarray:
         return self.reconstruct_batch([Uel], ref_data, level)[0]
 
-    def reconstruct_batch(self, Uels, ref_data: dict, level: int):
-        """Batch reconstruction."""
+    def _prepare_input(self, Uel: np.ndarray, ref_data: dict, level: int):
+        """Prepare one flattened masked input sample."""
         Injref = ref_data['Injref']
         Uelref = ref_data['Uelref']
-
         vincl = self.create_vincl(level, Injref).T.flatten()
-        y_batch = []
-        for Uel in Uels:
-            y = np.array(Uel) - np.array(Uelref)
-            y[~vincl] = 0
-            y_batch.append(np.asarray(y).reshape(-1))
+
+        y = np.array(Uel) - np.array(Uelref)
+        y[~vincl] = 0
+        return np.asarray(y).reshape(-1)
+
+    def reconstruct_batch(self, Uels, ref_data: dict, level: int):
+        """Batch reconstruction."""
+        y_batch = [self._prepare_input(Uel, ref_data, level) for Uel in Uels]
 
         y_tensor = torch.from_numpy(np.stack(y_batch)).float().to(self.device)
         level_tensor = torch.full(
             (y_tensor.shape[0],), level, device=self.device)
 
         with torch.no_grad():
-            pred = self.model(y_tensor, level_tensor)
-            pred_softmax = F.softmax(pred, dim=1)
+            with self._autocast_context():
+                pred = self.model(y_tensor, level_tensor)
+                pred_softmax = F.softmax(pred, dim=1)
+            pred_argmax = torch.argmax(pred_softmax, dim=1).cpu().numpy()
+
+        return [arr.astype(int) for arr in pred_argmax]
+
+    def reconstruct_mixed_batch(self, samples):
+        """Batch reconstruction across different levels."""
+        y_batch = [self._prepare_input(s['Uel'], s['ref_data'], s['level'])
+                   for s in samples]
+        levels = [s['level'] for s in samples]
+
+        y_tensor = torch.from_numpy(np.stack(y_batch)).float().to(self.device)
+        level_tensor = torch.tensor(levels, dtype=torch.float,
+                                    device=self.device)
+
+        with torch.no_grad():
+            with self._autocast_context():
+                pred = self.model(y_tensor, level_tensor)
+                pred_softmax = F.softmax(pred, dim=1)
             pred_argmax = torch.argmax(pred_softmax, dim=1).cpu().numpy()
 
         return [arr.astype(int) for arr in pred_argmax]

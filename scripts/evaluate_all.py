@@ -53,7 +53,8 @@ def get_output_dir(method_name, base_dir='results'):
         num += 1
 
 
-def build_pipeline(method_name, device, weights_base_dir, batch_mode):
+def build_pipeline(method_name, device, weights_base_dir, batch_mode,
+                   sae_config_path, vq_sae_config_path):
     """Build a pipeline instance by method name."""
     if method_name == 'fcunet':
         from src.pipelines import FCUNetPipeline
@@ -68,6 +69,23 @@ def build_pipeline(method_name, device, weights_base_dir, batch_mode):
     elif method_name == 'dpcaunet':
         from src.pipelines import DPCAUNetPipeline
         return DPCAUNetPipeline(device=device, weights_base_dir=weights_base_dir)
+    elif method_name == 'hcdpcaunet':
+        from src.pipelines import HCDPCAUNetPipeline
+        return HCDPCAUNetPipeline(device=device, weights_base_dir=weights_base_dir)
+    elif method_name == 'sae':
+        from src.pipelines import SAEPipeline
+        return SAEPipeline(
+            device=device,
+            weights_base_dir=weights_base_dir,
+            config_path=sae_config_path,
+        )
+    elif method_name == 'vq_sae':
+        from src.pipelines import VQSAEPipeline
+        return VQSAEPipeline(
+            device=device,
+            weights_base_dir=weights_base_dir,
+            config_path=vq_sae_config_path,
+        )
     else:
         raise ValueError(f'Unknown method: {method_name}')
 
@@ -83,6 +101,91 @@ def evaluate_method(method_name, pipeline, levels, eval_loader, output_dir,
     """
     results = {}
     level_data = {}
+
+    if hasattr(pipeline, 'reconstruct_mixed_batch') and method_name != 'condd':
+        mixed_samples = []
+        per_level_inputs = {}
+
+        print('\n  Mixed-level batch inference:')
+        for level in levels:
+            ref_data = eval_loader.load_reference(level)
+            measurements = eval_loader.load_measurements(level)
+            ground_truths = eval_loader.load_ground_truths(level)
+            per_level_inputs[level] = {
+                'ref_data': ref_data,
+                'ground_truths': ground_truths,
+                'num_measurements': len(measurements),
+            }
+            for sample_idx, Uel in enumerate(measurements):
+                mixed_samples.append({
+                    'level': level,
+                    'sample_idx': sample_idx,
+                    'Uel': Uel,
+                    'ref_data': ref_data,
+                })
+
+        pipeline.load_model(levels[0])
+        t0 = time.time()
+        mixed_reconstructions = pipeline.reconstruct_mixed_batch(mixed_samples)
+        elapsed = time.time() - t0
+        print(f'    Reconstructed {len(mixed_reconstructions)} samples in '
+              f'{elapsed:.1f}s ({elapsed / max(len(mixed_reconstructions), 1):.1f}s/sample)')
+
+        per_level_reconstructions = {level: [] for level in levels}
+        for sample, reco in zip(mixed_samples, mixed_reconstructions):
+            per_level_reconstructions[sample['level']].append(reco)
+
+        for level in levels:
+            print(f'\n  Level {level}:')
+            ground_truths = per_level_inputs[level]['ground_truths']
+            reconstructions = per_level_reconstructions[level]
+            scores = []
+
+            pbar = tqdm(range(len(reconstructions)), total=len(reconstructions),
+                        desc='    Scoring', leave=False)
+            for i in pbar:
+                if i < len(ground_truths):
+                    score = scoring_function(ground_truths[i], reconstructions[i])
+                    scores.append(score)
+                    pbar.set_postfix(score=f'{score:.4f}')
+
+            sum_score = float(np.sum(scores))
+            mean_score = float(np.mean(scores)) if scores else 0.0
+
+            results[level] = {
+                'scores': [float(s) for s in scores],
+                'sum_score': sum_score,
+                'mean_score': mean_score,
+            }
+            level_data[level] = {
+                'ground_truths': ground_truths,
+                'reconstructions': reconstructions,
+                'scores': [float(s) for s in scores],
+            }
+
+            print(f'    Scores: {[f"{s:.4f}" for s in scores]}')
+            print(f'    Sum: {sum_score:.4f}, Mean: {mean_score:.4f}')
+
+            if save_mat:
+                level_dir = os.path.join(output_dir, f'level_{level}')
+                os.makedirs(level_dir, exist_ok=True)
+                for i, reco in enumerate(reconstructions):
+                    mat_path = os.path.join(level_dir, f'{i + 1}.mat')
+                    savemat(mat_path, {'reconstruction': reco.astype(int)})
+
+            if save_plots:
+                plot_path = os.path.join(output_dir, f'comparison_level_{level}.png')
+                plot_reconstruction_comparison(
+                    ground_truths, reconstructions, level,
+                    scores=scores, save_path=plot_path
+                )
+
+        if save_plots and len(level_data) > 0:
+            overview_path = os.path.join(output_dir, f'overview_{method_name}.png')
+            plot_method_overview(level_data, method_name, save_path=overview_path)
+            print(f'  Overview plot saved to: {overview_path}')
+
+        return results, level_data
 
     for level in levels:
         print(f'\n  Level {level}:')
@@ -209,7 +312,8 @@ def print_summary_table(all_results):
 def main():
     parser = argparse.ArgumentParser(description='Evaluate KTC2023 EIT reconstruction methods')
     parser.add_argument('--methods', nargs='+', default=['fcunet', 'postp', 'condd'],
-                        choices=['fcunet', 'postp', 'condd', 'dpcaunet'],
+                        choices=['fcunet', 'postp', 'condd', 'dpcaunet',
+                                 'hcdpcaunet', 'sae', 'vq_sae'],
                         help='Methods to evaluate (default: all three)')
     parser.add_argument('--levels', nargs='+', type=int, default=list(range(1, 8)),
                         help='Difficulty levels to evaluate (default: 1-7)')
@@ -227,6 +331,10 @@ def main():
                         help='Skip saving .mat reconstruction files')
     parser.add_argument('--condd-sequential', action='store_true',
                         help='Run conditional diffusion in sequential mode (less VRAM)')
+    parser.add_argument('--sae-config', default='scripts/sae_pipeline.yaml',
+                        help='YAML config for sae_dir / sae_predictor_dir')
+    parser.add_argument('--vq-sae-config', default='scripts/vq_sae_pipeline.yaml',
+                        help='YAML config for vq_sae_dir / vq_sae_predictor_dir')
     args = parser.parse_args()
 
     eval_loader = EvaluationDataLoader(
@@ -248,7 +356,9 @@ def main():
         print(f'Results will be saved to: {output_dir}')
 
         batch_mode = not args.condd_sequential
-        pipeline = build_pipeline(method, args.device, args.weights_dir, batch_mode)
+        pipeline = build_pipeline(
+            method, args.device, args.weights_dir, batch_mode,
+            args.sae_config, args.vq_sae_config)
 
         results, level_data = evaluate_method(
             method_name=method,

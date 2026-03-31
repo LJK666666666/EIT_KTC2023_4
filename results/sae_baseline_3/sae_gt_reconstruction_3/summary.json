@@ -1,0 +1,17 @@
+{
+  "weights_dir": "results\\sae_baseline_3",
+  "checkpoint": "results\\sae_baseline_3\\best.pt",
+  "device": "cuda",
+  "groups": {
+    "codes_python": {
+      "plot": "results\\sae_baseline_3\\sae_gt_reconstruction_3\\codes_python_comparison.png",
+      "scores": [
+        0.9706810083949913,
+        0.9827648776654754,
+        0.9835321103809496,
+        0.9621887608129764
+      ],
+      "mean_score": 0.9747916893135982
+    }
+  }
+}

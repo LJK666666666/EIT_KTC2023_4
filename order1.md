@@ -71,10 +71,10 @@ max35%
 python scripts/train.py --method dpcaunet --batch-size 32 --hdf5-path dataset_sim/level_1/data.h5
 
 cd EIT_KTC2023_4 && python scripts/train.py --method dpcaunet --batch-size 32 --hdf5-path dataset_sim/level_1/data.h5 --device tpu
-Libtpu version: 0.0.21                                   
-Accelerator type: v6e                                    
-                                                         
-TPU Chips                                       
+Libtpu version: 0.0.21      
+Accelerator type: v6e       
+                            
+TPU Chips          
 ┏━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━┓
 ┃ Chip        ┃ Type         ┃ Devices ┃ PID   ┃
 ┡━━━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━┩
@@ -111,5 +111,24 @@ TensorCore Utilization
 cd EIT_KTC2023_4 && python scripts/train.py --method dpcaunet --batch-size 48 --hdf5-path dataset_sim/level_1/data.h5 --device tpu
 python scripts/evaluate_all.py --methods dpcaunet --weights-dir results\dpcaunet_baseline_4
 tpu-info
+python scripts/evaluate_all.py --methods fcunet --weights-dir results\fcunet_baseline_1
+
+python scripts/evaluate_all.py --methods hcdpcaunet --weights-dir results\hcdpcaunet_baseline_1
+
+python scripts/train.py --method sae --hdf5-path dataset_sim/level_1/data.h5
+python scripts/visualize_sae_reconstruction.py --weights-dir results/sae_baseline_3
+
+python scripts/train.py --method sae_predictor --hdf5-path dataset_sim/level_1/data.h5 \
+--sae-checkpoint results/sae_baseline_3/best.pt \
+--latent-h5-path results/sae_baseline_3/latent_codes.h5
+
+python scripts/train.py --method sae_predictor --hdf5-path dataset_sim/level_1/data.h5 --sae-checkpoint results/sae_baseline_3/best.pt --latent-h5-path results/sae_baseline_3/latent_codes.h5
+
+python scripts/train.py --method sae --hdf5-path dataset_sim/level_1/data.h5 --decoder-finetune --sae-checkpoint results/sae_baseline_3/best.pt
+python scripts/train.py --method sae_predictor --hdf5-path dataset_sim/level_1/data.h5 --sae-checkpoint results/sae_baseline_3/best.pt --latent-h5-path results/sae_baseline_3/latent_codes.h5 --experiment-name sae_predictor_imgloss
+
+python scripts/visualize_sae_reconstruction.py --weights-dir results/sae_predictor_imgloss_2
+
+python scripts/train.py --method sae_predictor --hdf5-path dataset_sim/level_1/data.h5 --sae-checkpoint results/sae_baseline_3/best.pt --latent-h5-path results/sae_baseline_3/latent_codes.h5 --experiment-name sae_predictor_joint_img
 
 

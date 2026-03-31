@@ -1,0 +1,10 @@
+{
+  "weights_dir": "results\\sae_predictor_baseline_1",
+  "checkpoint": "results\\sae_baseline_3\\best.pt",
+  "device": "cuda",
+  "groups": {
+    "codes_python": {
+      "plot": "results\\sae_predictor_baseline_1\\sae_gt_reconstruction_1\\codes_python_comparison.png"
+    }
+  }
+}

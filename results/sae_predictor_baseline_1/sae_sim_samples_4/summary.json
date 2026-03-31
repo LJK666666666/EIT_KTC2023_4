@@ -1,0 +1,54 @@
+{
+  "predictor_dir": "results\\sae_predictor_baseline_1",
+  "sae_dir": "results\\sae_baseline_3",
+  "hdf5_path": "dataset_sim/level_1/data.h5",
+  "level": 1,
+  "rows": 2,
+  "cols": 4,
+  "batch_size": 16,
+  "seed": 1,
+  "splits": {
+    "train": {
+      "indices": [
+        12634,
+        4186,
+        7291,
+        10132,
+        9184,
+        6260,
+        7669,
+        3998
+      ],
+      "plot": "results\\sae_predictor_baseline_1\\sae_sim_samples_4\\train_comparison.png",
+      "num_samples": 8
+    },
+    "val": {
+      "indices": [
+        2259,
+        193,
+        4718,
+        3130,
+        743,
+        7238,
+        12542,
+        4262
+      ],
+      "plot": "results\\sae_predictor_baseline_1\\sae_sim_samples_4\\val_comparison.png",
+      "num_samples": 8
+    },
+    "test": {
+      "indices": [
+        4559,
+        505,
+        7399,
+        7826,
+        10177,
+        3825,
+        12315,
+        3827
+      ],
+      "plot": "results\\sae_predictor_baseline_1\\sae_sim_samples_4\\test_comparison.png",
+      "num_samples": 8
+    }
+  }
+}

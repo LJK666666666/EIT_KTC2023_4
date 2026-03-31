@@ -24,6 +24,8 @@ Usage example:
 from abc import ABC, abstractmethod
 from contextlib import nullcontext
 import glob
+import pickle
+import sys
 import numpy as np
 import torch
 import os
@@ -61,7 +63,18 @@ class BasePipeline(ABC):
           - Raw state_dict (from original submission weights)
           - Full training checkpoint (with 'model_state_dict' key)
         """
-        data = torch.load(path, map_location=device, weights_only=True)
+        # Compatibility shim for checkpoints pickled under numpy versions
+        # that referenced the private numpy._core module path.
+        if 'numpy._core' not in sys.modules:
+            sys.modules['numpy._core'] = np.core
+        if 'numpy._core.multiarray' not in sys.modules:
+            sys.modules['numpy._core.multiarray'] = np.core.multiarray
+        try:
+            data = torch.load(path, map_location=device, weights_only=True)
+        except pickle.UnpicklingError:
+            # PyTorch 2.6+ safe loader rejects some older/local checkpoint
+            # metadata (e.g. numpy scalars). Fall back for trusted local files.
+            data = torch.load(path, map_location=device, weights_only=False)
         if isinstance(data, dict) and 'model_state_dict' in data:
             return data['model_state_dict']
         return data

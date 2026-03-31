@@ -3,3 +3,7 @@ from .postp_config import get_configs as get_postp_config
 from .condd_config import get_configs as get_condd_config
 from .dpcaunet_config import get_configs as get_dpcaunet_config
 from .hcdpcaunet_config import get_configs as get_hcdpcaunet_config
+from .sae_config import get_configs as get_sae_config
+from .sae_predictor_config import get_configs as get_sae_predictor_config
+from .vq_sae_config import get_configs as get_vq_sae_config
+from .vq_sae_predictor_config import get_configs as get_vq_sae_predictor_config

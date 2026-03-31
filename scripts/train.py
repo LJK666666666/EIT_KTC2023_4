@@ -48,7 +48,8 @@ def parse_args():
 
     parser.add_argument('--method', type=str, required=True,
                         choices=['fcunet', 'postp', 'condd', 'dpcaunet',
-                                 'hcdpcaunet'],
+                                 'hcdpcaunet', 'sae', 'sae_predictor',
+                                 'vq_sae', 'vq_sae_predictor'],
                         help='Training method')
     parser.add_argument('--level', type=int, default=1,
                         help='Difficulty level for CondD (1-7)')
@@ -75,6 +76,31 @@ def parse_args():
     # Resume
     parser.add_argument('--resume', type=str, default=None,
                         help='Path to last.pt checkpoint for resume')
+
+    # SAE predictor specific
+    parser.add_argument('--sae-checkpoint', type=str, default=None,
+                        help='Path to trained SAE best.pt '
+                             '(for sae decoder fine-tune or sae_predictor)')
+    parser.add_argument('--latent-h5-path', type=str, default=None,
+                        help='Path to latent_codes.h5 (for sae_predictor)')
+    parser.add_argument('--vq-sae-checkpoint', type=str, default=None,
+                        help='Path to trained VQ SAE best.pt '
+                             '(for vq_sae_predictor)')
+    parser.add_argument('--vq-latent-h5-path', type=str, default=None,
+                        help='Path to VQ latent_codes.h5 (for vq_sae_predictor)')
+    parser.add_argument('--latent-noise-std', type=float, default=None,
+                        help='Std of Gaussian noise added to SAE z_shape')
+    parser.add_argument('--decoder-finetune', action='store_true',
+                        help='For sae: load pretrained checkpoint and freeze '
+                             'encoder/angle modules, training decoder only')
+    parser.add_argument('--use-image-loss', action='store_true',
+                        help='For sae_predictor: add frozen SAE decoder image loss')
+    parser.add_argument('--image-loss-switch-ratio', type=float, default=None,
+                        help='For sae_predictor: epoch ratio before enabling image loss ramp')
+    parser.add_argument('--image-loss-weight-start', type=float, default=None,
+                        help='For sae_predictor: image loss weight at ramp start')
+    parser.add_argument('--image-loss-weight-end', type=float, default=None,
+                        help='For sae_predictor: image loss weight at ramp end')
 
     # Misc
     parser.add_argument('--seed', type=int, default=None,
@@ -138,6 +164,62 @@ def main():
         name = args.experiment_name or 'hcdpcaunet_baseline'
         _apply_overrides(config, args)
         trainer = HCDPCAUNetTrainer(config=config, experiment_name=name)
+
+    elif args.method == 'sae':
+        from src.configs import get_sae_config
+        from src.trainers import SAETrainer
+
+        config = get_sae_config()
+        if args.experiment_name is not None:
+            name = args.experiment_name
+        elif args.decoder_finetune and args.sae_checkpoint:
+            ckpt_dir_name = os.path.basename(
+                os.path.dirname(os.path.normpath(args.sae_checkpoint)))
+            name = f'{ckpt_dir_name}_decoder_ft'
+        else:
+            name = 'sae_baseline'
+        _apply_overrides(config, args)
+        if args.sae_checkpoint:
+            config.training.pretrained_checkpoint = args.sae_checkpoint
+        if args.decoder_finetune:
+            config.training.decoder_finetune = True
+        trainer = SAETrainer(config=config, experiment_name=name)
+
+    elif args.method == 'sae_predictor':
+        from src.configs import get_sae_predictor_config
+        from src.trainers import SAEPredictorTrainer
+
+        config = get_sae_predictor_config()
+        name = args.experiment_name or 'sae_predictor_baseline'
+        _apply_overrides(config, args)
+        # Accept extra args for SAE checkpoint and latent codes
+        if args.sae_checkpoint:
+            config.sae.checkpoint = args.sae_checkpoint
+        if args.latent_h5_path:
+            config.sae.latent_h5_path = args.latent_h5_path
+        trainer = SAEPredictorTrainer(config=config, experiment_name=name)
+
+    elif args.method == 'vq_sae':
+        from src.configs import get_vq_sae_config
+        from src.trainers import VQSAETrainer
+
+        config = get_vq_sae_config()
+        name = args.experiment_name or 'vq_sae_baseline'
+        _apply_overrides(config, args)
+        trainer = VQSAETrainer(config=config, experiment_name=name)
+
+    elif args.method == 'vq_sae_predictor':
+        from src.configs import get_vq_sae_predictor_config
+        from src.trainers import VQSAEPredictorTrainer
+
+        config = get_vq_sae_predictor_config()
+        name = args.experiment_name or 'vq_sae_predictor_baseline'
+        _apply_overrides(config, args)
+        if args.vq_sae_checkpoint:
+            config.vq_sae.checkpoint = args.vq_sae_checkpoint
+        if args.vq_latent_h5_path:
+            config.vq_sae.latent_h5_path = args.vq_latent_h5_path
+        trainer = VQSAEPredictorTrainer(config=config, experiment_name=name)
 
     else:
         print(f'Unknown method: {args.method}')
@@ -229,6 +311,16 @@ def _apply_overrides(config, args):
         config.training.precision = args.precision
     if args.result_base_dir is not None:
         config.result_base_dir = args.result_base_dir
+    if args.latent_noise_std is not None and hasattr(config, 'training'):
+        config.training.latent_noise_std = args.latent_noise_std
+    if args.use_image_loss and hasattr(config, 'training'):
+        config.training.use_image_loss = True
+    if args.image_loss_switch_ratio is not None and hasattr(config, 'training'):
+        config.training.image_loss_switch_ratio = args.image_loss_switch_ratio
+    if args.image_loss_weight_start is not None and hasattr(config, 'training'):
+        config.training.image_loss_weight_start = args.image_loss_weight_start
+    if args.image_loss_weight_end is not None and hasattr(config, 'training'):
+        config.training.image_loss_weight_end = args.image_loss_weight_end
 
 
 if __name__ == '__main__':

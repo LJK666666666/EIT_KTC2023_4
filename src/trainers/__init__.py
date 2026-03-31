@@ -4,3 +4,7 @@ from .postp_trainer import PostPTrainer
 from .condd_trainer import CondDTrainer
 from .dpcaunet_trainer import DPCAUNetTrainer
 from .hcdpcaunet_trainer import HCDPCAUNetTrainer
+from .sae_trainer import SAETrainer
+from .sae_predictor_trainer import SAEPredictorTrainer
+from .vq_sae_trainer import VQSAETrainer
+from .vq_sae_predictor_trainer import VQSAEPredictorTrainer

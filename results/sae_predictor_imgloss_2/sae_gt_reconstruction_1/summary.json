@@ -1,0 +1,33 @@
+{
+  "weights_dir": "results/sae_predictor_imgloss_2",
+  "checkpoint": "results\\sae_baseline_3\\best.pt",
+  "device": "cuda",
+  "groups": {
+    "codes_python": {
+      "plot": "results/sae_predictor_imgloss_2\\sae_gt_reconstruction_1\\codes_python_comparison.png"
+    },
+    "evaluation": {
+      "1": {
+        "plot": "results/sae_predictor_imgloss_2\\sae_gt_reconstruction_1\\evaluation_level_1_comparison.png"
+      },
+      "2": {
+        "plot": "results/sae_predictor_imgloss_2\\sae_gt_reconstruction_1\\evaluation_level_2_comparison.png"
+      },
+      "3": {
+        "plot": "results/sae_predictor_imgloss_2\\sae_gt_reconstruction_1\\evaluation_level_3_comparison.png"
+      },
+      "4": {
+        "plot": "results/sae_predictor_imgloss_2\\sae_gt_reconstruction_1\\evaluation_level_4_comparison.png"
+      },
+      "5": {
+        "plot": "results/sae_predictor_imgloss_2\\sae_gt_reconstruction_1\\evaluation_level_5_comparison.png"
+      },
+      "6": {
+        "plot": "results/sae_predictor_imgloss_2\\sae_gt_reconstruction_1\\evaluation_level_6_comparison.png"
+      },
+      "7": {
+        "plot": "results/sae_predictor_imgloss_2\\sae_gt_reconstruction_1\\evaluation_level_7_comparison.png"
+      }
+    }
+  }
+}

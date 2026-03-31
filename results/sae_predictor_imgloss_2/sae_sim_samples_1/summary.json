@@ -1,0 +1,20 @@
+{
+  "predictor_dir": "results\\sae_predictor_imgloss_2",
+  "sae_dir": "results\\sae_baseline_3",
+  "hdf5_path": "dataset_sim/level_1/data.h5",
+  "level": 1,
+  "rows": 1,
+  "cols": 2,
+  "batch_size": 2,
+  "seed": 1,
+  "splits": {
+    "test": {
+      "indices": [
+        5409,
+        10387
+      ],
+      "plot": "results\\sae_predictor_imgloss_2\\sae_sim_samples_1\\test_comparison.png",
+      "num_samples": 2
+    }
+  }
+}

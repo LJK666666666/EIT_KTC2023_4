@@ -1,0 +1,72 @@
+{
+  "weights_dir": "results\\sae_baseline_3",
+  "checkpoint": "results\\sae_baseline_3\\best.pt",
+  "device": "cuda",
+  "groups": {
+    "evaluation": {
+      "1": {
+        "plot": "results\\sae_baseline_3\\sae_gt_reconstruction_5\\evaluation_level_1_comparison.png",
+        "scores": [
+          0.9913749597130275,
+          0.9930330197953119,
+          0.9556326962026089
+        ],
+        "mean_score": 0.9800135585703161
+      },
+      "2": {
+        "plot": "results\\sae_baseline_3\\sae_gt_reconstruction_5\\evaluation_level_2_comparison.png",
+        "scores": [
+          0.9838833988416205,
+          0.9025189909450606,
+          0.985884636546817
+        ],
+        "mean_score": 0.9574290087778327
+      },
+      "3": {
+        "plot": "results\\sae_baseline_3\\sae_gt_reconstruction_5\\evaluation_level_3_comparison.png",
+        "scores": [
+          0.9145849246286278,
+          0.988309075400746,
+          0.95939604722
+        ],
+        "mean_score": 0.954096682416458
+      },
+      "4": {
+        "plot": "results\\sae_baseline_3\\sae_gt_reconstruction_5\\evaluation_level_4_comparison.png",
+        "scores": [
+          0.9520682907277935,
+          0.89287648659689,
+          0.9473951422151508
+        ],
+        "mean_score": 0.9307799731799449
+      },
+      "5": {
+        "plot": "results\\sae_baseline_3\\sae_gt_reconstruction_5\\evaluation_level_5_comparison.png",
+        "scores": [
+          0.918455241318567,
+          0.9648445436099256,
+          0.953807111954406
+        ],
+        "mean_score": 0.9457022989609661
+      },
+      "6": {
+        "plot": "results\\sae_baseline_3\\sae_gt_reconstruction_5\\evaluation_level_6_comparison.png",
+        "scores": [
+          0.9468275411130236,
+          0.894246165354132,
+          0.8271199626245387
+        ],
+        "mean_score": 0.8893978896972315
+      },
+      "7": {
+        "plot": "results\\sae_baseline_3\\sae_gt_reconstruction_5\\evaluation_level_7_comparison.png",
+        "scores": [
+          0.8851112250513555,
+          0.9435873022000677,
+          0.9729541050629842
+        ],
+        "mean_score": 0.9338842107714691
+      }
+    }
+  }
+}
