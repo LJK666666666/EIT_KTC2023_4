@@ -1,0 +1,10 @@
+pip install numpy
+pip install torch
+pip install ml_collections
+pip install scipy
+pip install pillow
+pip install torchvision
+pip install h5py
+pip install matplotlib
+pip install scikit-image
+pip install tensorboard
