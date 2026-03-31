@@ -1,12 +1,12 @@
 """
-Visualize SAE self-reconstruction on official ground-truth datasets.
+Visualize AE self-reconstruction on official ground-truth datasets.
 
-Loads a trained SAE checkpoint, reconstructs:
-  1. KTC2023/Codes_Python/GroundTruths (4 samples)
-  2. KTC2023/EvaluationData/GroundTruths (7 levels x 3 samples)
+Supports both:
+  - continuous SAE
+  - ST-1D-VQ-VAE (vq_sae)
 
 and saves side-by-side GT vs reconstruction comparison figures under the
-SAE result directory.
+corresponding result directory.
 """
 
 import argparse
@@ -26,16 +26,20 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.evaluation.visualization import plot_reconstruction_comparison
 from src.models.sae import SparseAutoEncoder
+from src.models.vq_sae import ST1DVQVAE
 from src.pipelines.base_pipeline import BasePipeline
 
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description='Visualize SAE reconstructions on official GT images')
+        description='Visualize AE reconstructions on official GT images')
     parser.add_argument('--weights-dir', type=str, required=True,
-                        help='Trained SAE result directory (contains best.pt)')
+                        help='Trained SAE/VQ-SAE result directory (contains best.pt)')
     parser.add_argument('--device', type=str, default='cuda',
                         help='Compute device (cuda/cpu)')
+    parser.add_argument('--method', type=str, default='auto',
+                        choices=['auto', 'sae', 'vq_sae'],
+                        help='Model family. auto = infer from config/checkpoint')
     parser.add_argument('--dataset', type=str, default='both',
                         choices=['codes', 'eval', 'both'],
                         help='Which official GT set to visualize')
@@ -66,7 +70,7 @@ def autocast_context(device):
     return nullcontext()
 
 
-def create_result_subdir(weights_dir, prefix='sae_gt_reconstruction'):
+def create_result_subdir(weights_dir, prefix='ae_gt_reconstruction'):
     num = 1
     while True:
         out_dir = os.path.join(weights_dir, f'{prefix}_{num}')
@@ -76,7 +80,7 @@ def create_result_subdir(weights_dir, prefix='sae_gt_reconstruction'):
         num += 1
 
 
-def load_sae_config(weights_dir):
+def load_model_config(weights_dir):
     config_path = os.path.join(weights_dir, 'config.yaml')
     if not os.path.exists(config_path):
         raise FileNotFoundError(f'Config not found: {config_path}')
@@ -84,15 +88,37 @@ def load_sae_config(weights_dir):
         return yaml.unsafe_load(f)
 
 
-def build_model_from_config(config, device):
+def infer_model_family(config, requested='auto'):
+    if requested != 'auto':
+        return requested
+    model_cfg = config.get('model', {}) if isinstance(config, dict) else {}
+    if 'num_slots' in model_cfg and 'codebook_size' in model_cfg:
+        return 'vq_sae'
+    return 'sae'
+
+
+def build_model_from_config(config, device, family='auto'):
     model_cfg = config['model']
-    model = SparseAutoEncoder(
-        in_channels=model_cfg.get('in_channels', 3),
-        encoder_channels=tuple(model_cfg.get(
-            'encoder_channels', (32, 64, 128, 256))),
-        shape_dim=model_cfg.get('shape_dim', 63),
-        decoder_start_size=model_cfg.get('decoder_start_size', 4),
-    )
+    family = infer_model_family(config, family)
+    if family == 'vq_sae':
+        model = ST1DVQVAE(
+            in_channels=model_cfg.get('in_channels', 3),
+            encoder_channels=tuple(model_cfg.get(
+                'encoder_channels', (32, 64, 128, 256))),
+            num_slots=model_cfg.get('num_slots', 16),
+            codebook_size=model_cfg.get('codebook_size', 512),
+            code_dim=model_cfg.get('code_dim', 32),
+            decoder_start_size=model_cfg.get('decoder_start_size', 4),
+            vq_beta=config.get('training', {}).get('vq_beta', 0.25),
+        )
+    else:
+        model = SparseAutoEncoder(
+            in_channels=model_cfg.get('in_channels', 3),
+            encoder_channels=tuple(model_cfg.get(
+                'encoder_channels', (32, 64, 128, 256))),
+            shape_dim=model_cfg.get('shape_dim', 63),
+            decoder_start_size=model_cfg.get('decoder_start_size', 4),
+        )
     model.to(device)
     return model
 
@@ -104,16 +130,21 @@ def _looks_like_sae_state_dict(state_dict):
     return any(k.startswith('angle_cnn.') for k in keys)
 
 
-def resolve_sae_weights(weights_dir, device):
-    """Resolve a full SAE model for reconstruction visualization.
+def _looks_like_vq_sae_state_dict(state_dict):
+    if not isinstance(state_dict, dict):
+        return False
+    keys = list(state_dict.keys())
+    return any(k.startswith('quantizer.embedding.') for k in keys)
+
+
+def resolve_model_weights(weights_dir, device, requested_family='auto'):
+    """Resolve a full AE model for reconstruction visualization.
 
     Supports:
-      1. Passing an SAE result directory directly.
-      2. Passing an SAE predictor result directory. In that case the paired SAE
-         checkpoint is resolved from predictor config, and any fine-tuned
-         decoder weights stored in the predictor checkpoint are overlaid.
+      1. Passing an SAE/VQ-SAE result directory directly.
+      2. Passing an SAE predictor result directory.
     """
-    config = load_sae_config(weights_dir)
+    config = load_model_config(weights_dir)
     ckpt_path = BasePipeline._find_weight([
         os.path.join(weights_dir, 'best.pt'),
         os.path.join(weights_dir, 'last.pt'),
@@ -122,36 +153,43 @@ def resolve_sae_weights(weights_dir, device):
     state_dict = (raw_state.get('model_state_dict', raw_state)
                   if isinstance(raw_state, dict) else raw_state)
 
-    # Case 1: this directory is already an SAE result dir.
-    if _looks_like_sae_state_dict(state_dict):
-        return config, ckpt_path, state_dict
+    family = infer_model_family(config, requested_family)
 
-    # Case 2: predictor dir. Resolve paired SAE checkpoint from config.
-    sae_cfg = config.get('sae', {}) if isinstance(config, dict) else {}
-    sae_ckpt = sae_cfg.get('checkpoint', '')
-    if not sae_ckpt:
+    # Case 1: this directory is already an AE result dir.
+    if _looks_like_sae_state_dict(state_dict) or _looks_like_vq_sae_state_dict(state_dict):
+        return config, ckpt_path, state_dict, family
+
+    # Case 2: predictor dir. Resolve paired AE checkpoint from config.
+    ae_cfg = {}
+    if isinstance(config, dict):
+        if 'sae' in config:
+            ae_cfg = config.get('sae', {})
+            family = 'sae'
+        elif 'vq_sae' in config:
+            ae_cfg = config.get('vq_sae', {})
+            family = 'vq_sae'
+    ae_ckpt = ae_cfg.get('checkpoint', '')
+    if not ae_ckpt:
         raise RuntimeError(
             f'{weights_dir} does not contain SAE model weights, and its '
-            'config.yaml does not provide sae.checkpoint to resolve a base SAE.'
+            'config.yaml does not provide paired autoencoder checkpoint.'
         )
 
-    sae_dir = os.path.dirname(os.path.normpath(sae_ckpt))
-    sae_config = load_sae_config(sae_dir)
-    sae_ckpt_path = BasePipeline._find_weight([
-        os.path.join(sae_dir, 'best.pt'),
-        os.path.join(sae_dir, 'last.pt'),
+    ae_dir = os.path.dirname(os.path.normpath(ae_ckpt))
+    ae_config = load_model_config(ae_dir)
+    ae_ckpt_path = BasePipeline._find_weight([
+        os.path.join(ae_dir, 'best.pt'),
+        os.path.join(ae_dir, 'last.pt'),
     ])
-    sae_state = BasePipeline._load_state_dict(sae_ckpt_path, device)
+    ae_state = BasePipeline._load_state_dict(ae_ckpt_path, device)
 
-    # If predictor checkpoint contains a fine-tuned decoder, overlay it.
-    if isinstance(raw_state, dict) and 'sae_decoder_state_dict' in raw_state:
-        model = build_model_from_config(sae_config, device)
-        model.load_state_dict(sae_state)
+    if family == 'sae' and isinstance(raw_state, dict) and 'sae_decoder_state_dict' in raw_state:
+        model = build_model_from_config(ae_config, device, family=family)
+        model.load_state_dict(ae_state)
         model.decoder.load_state_dict(raw_state['sae_decoder_state_dict'])
-        return sae_config, sae_ckpt_path, model.state_dict()
+        return ae_config, ae_ckpt_path, model.state_dict(), family
 
-    # Old predictor checkpoints only store MLP; use base SAE directly.
-    return sae_config, sae_ckpt_path, sae_state
+    return ae_config, ae_ckpt_path, ae_state, family
 
 
 def labels_to_onehot(label_img):
@@ -167,7 +205,8 @@ def reconstruct_batch(model, gt_labels, device):
     x = torch.from_numpy(x_np).to(device)
     with torch.no_grad():
         with autocast_context(device):
-            logits, _, _ = model(x)
+            outputs = model(x)
+            logits = outputs[0] if isinstance(outputs, (tuple, list)) else outputs
         pred = torch.argmax(logits, dim=1)
     return pred.cpu().numpy().astype(np.int32)
 
@@ -215,9 +254,9 @@ def main():
     args = parse_args()
     device = resolve_device(args.device)
 
-    config, ckpt_path, state_dict = resolve_sae_weights(
-        args.weights_dir, device)
-    model = build_model_from_config(config, device)
+    config, ckpt_path, state_dict, family = resolve_model_weights(
+        args.weights_dir, device, requested_family=args.method)
+    model = build_model_from_config(config, device, family=family)
     model.load_state_dict(state_dict)
     model.eval()
 
@@ -227,6 +266,7 @@ def main():
     summary = {
         'weights_dir': args.weights_dir,
         'checkpoint': ckpt_path,
+        'family': family,
         'device': device,
         'groups': {},
     }

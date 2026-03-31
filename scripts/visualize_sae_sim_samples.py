@@ -1,8 +1,8 @@
 """
-Visualize SAE predictor inference on random train/val/test simulated samples.
+Visualize SAE/VQ-SAE predictor inference on random train/val/test simulated samples.
 
 This script:
-1. Loads sae_predictor + SAE decoder through SAEPipeline.
+1. Loads predictor + decoder pipeline.
 2. Reads train/val/test indices from the predictor result config.yaml.
 3. Randomly samples N*M examples from each split.
 4. Runs batch inference without score computation.
@@ -26,20 +26,31 @@ from tqdm import tqdm
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.pipelines.sae_pipeline import SAEPipeline
+from src.pipelines.vq_sae_pipeline import VQSAEPipeline
 
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description='Visualize SAE predictor results on simulated train/val/test splits')
+        description='Visualize SAE/VQ-SAE predictor results on simulated train/val/test splits')
     parser.add_argument('--weights-dir', type=str, default='results',
-                        help='Base results directory containing SAE result folders')
+                        help='Base results directory or a predictor result directory')
+    parser.add_argument('--method', type=str, default='auto',
+                        choices=['auto', 'sae', 'vq_sae'],
+                        help='Pipeline family. auto = infer from result dir/config')
     parser.add_argument('--sae-config', type=str,
                         default='scripts/sae_pipeline.yaml',
                         help='YAML config with sae_dir / sae_predictor_dir')
+    parser.add_argument('--vq-sae-config', type=str,
+                        default='scripts/vq_sae_pipeline.yaml',
+                        help='YAML config with vq_sae_dir / vq_sae_predictor_dir')
     parser.add_argument('--sae-dir', type=str, default='',
                         help='Override SAE result subdirectory under weights-dir')
     parser.add_argument('--sae-predictor-dir', type=str, default='',
                         help='Override SAE predictor result subdirectory under weights-dir')
+    parser.add_argument('--vq-sae-dir', type=str, default='',
+                        help='Override VQ-SAE result subdirectory under weights-dir')
+    parser.add_argument('--vq-sae-predictor-dir', type=str, default='',
+                        help='Override VQ-SAE predictor result subdirectory under weights-dir')
     parser.add_argument('--device', type=str, default='cuda',
                         help='Inference device (cuda/cpu)')
     parser.add_argument('--splits', nargs='+',
@@ -59,7 +70,7 @@ def parse_args():
     return parser.parse_args()
 
 
-def create_result_subdir(base_dir, prefix='sae_sim_samples'):
+def create_result_subdir(base_dir, prefix='ae_sim_samples'):
     num = 1
     while True:
         out_dir = os.path.join(base_dir, f'{prefix}_{num}')
@@ -78,6 +89,21 @@ def load_result_config(result_dir):
     if not isinstance(data, dict):
         raise ValueError(f'Invalid config format: {config_path}')
     return data
+
+
+def infer_family(args, weights_name, predictor_cfg=None):
+    if args.method != 'auto':
+        return args.method
+    if weights_name.startswith('vq_sae_predictor_') or weights_name.startswith('vq_sae_baseline'):
+        return 'vq_sae'
+    if weights_name.startswith('sae_predictor_') or weights_name.startswith('sae_baseline'):
+        return 'sae'
+    if predictor_cfg and isinstance(predictor_cfg, dict):
+        if 'vq_sae' in predictor_cfg:
+            return 'vq_sae'
+        if 'sae' in predictor_cfg:
+            return 'sae'
+    return 'sae'
 
 
 def sample_split_indices(indices, num_samples, seed):
@@ -158,17 +184,20 @@ def main():
     weights_base_dir = args.weights_dir
     sae_dir_override = args.sae_dir
     predictor_dir_override = args.sae_predictor_dir
+    vq_sae_dir_override = args.vq_sae_dir
+    vq_predictor_dir_override = args.vq_sae_predictor_dir
 
     norm_weights_dir = os.path.normpath(args.weights_dir)
     weights_name = os.path.basename(norm_weights_dir)
     weights_parent = os.path.dirname(norm_weights_dir) or '.'
+    predictor_cfg = None
 
     if os.path.isdir(args.weights_dir) and os.path.exists(
             os.path.join(args.weights_dir, 'config.yaml')):
+        predictor_cfg = load_result_config(args.weights_dir)
         if weights_name.startswith('sae_predictor_') and not predictor_dir_override:
             predictor_dir_override = weights_name
             weights_base_dir = weights_parent
-            predictor_cfg = load_result_config(args.weights_dir)
             sae_ckpt = predictor_cfg.get('sae', {}).get('checkpoint', '')
             if sae_ckpt and not sae_dir_override:
                 sae_dir_override = os.path.basename(
@@ -176,17 +205,37 @@ def main():
         elif weights_name.startswith('sae_baseline') and not sae_dir_override:
             sae_dir_override = weights_name
             weights_base_dir = weights_parent
+        elif weights_name.startswith('vq_sae_predictor_') and not vq_predictor_dir_override:
+            vq_predictor_dir_override = weights_name
+            weights_base_dir = weights_parent
+            vq_ckpt = predictor_cfg.get('vq_sae', {}).get('checkpoint', '')
+            if vq_ckpt and not vq_sae_dir_override:
+                vq_sae_dir_override = os.path.basename(
+                    os.path.dirname(os.path.normpath(vq_ckpt)))
+        elif weights_name.startswith('vq_sae_baseline') and not vq_sae_dir_override:
+            vq_sae_dir_override = weights_name
+            weights_base_dir = weights_parent
 
-    pipeline = SAEPipeline(
-        device=args.device,
-        weights_base_dir=weights_base_dir,
-        config_path=args.sae_config,
-        sae_dir_override=sae_dir_override,
-        predictor_dir_override=predictor_dir_override)
+    family = infer_family(args, weights_name, predictor_cfg)
+
+    if family == 'vq_sae':
+        pipeline = VQSAEPipeline(
+            device=args.device,
+            weights_base_dir=weights_base_dir,
+            config_path=args.vq_sae_config,
+            vq_sae_dir_override=vq_sae_dir_override,
+            predictor_dir_override=vq_predictor_dir_override)
+    else:
+        pipeline = SAEPipeline(
+            device=args.device,
+            weights_base_dir=weights_base_dir,
+            config_path=args.sae_config,
+            sae_dir_override=sae_dir_override,
+            predictor_dir_override=predictor_dir_override)
     pipeline.load_model(level=1)
 
     if not pipeline.predictor_dir:
-        raise RuntimeError('Failed to resolve SAE predictor result directory.')
+        raise RuntimeError('Failed to resolve predictor result directory.')
 
     predictor_config = load_result_config(pipeline.predictor_dir)
     data_cfg = predictor_config['data']
@@ -201,7 +250,10 @@ def main():
     out_dir = create_result_subdir(pipeline.predictor_dir)
 
     print(f'Predictor dir: {pipeline.predictor_dir}')
-    print(f'SAE dir: {pipeline.sae_dir}')
+    if family == 'vq_sae':
+        print(f'VQ-SAE dir: {pipeline.vq_sae_dir}')
+    else:
+        print(f'SAE dir: {pipeline.sae_dir}')
     print(f'Output directory: {out_dir}')
     print(f'HDF5 path: {h5_path}')
     print(f'Level: {level}')
@@ -214,8 +266,8 @@ def main():
     }
 
     summary = {
+        'family': family,
         'predictor_dir': pipeline.predictor_dir,
-        'sae_dir': pipeline.sae_dir,
         'hdf5_path': h5_path,
         'level': level,
         'rows': args.rows,
@@ -224,6 +276,10 @@ def main():
         'seed': args.seed,
         'splits': {},
     }
+    if family == 'vq_sae':
+        summary['vq_sae_dir'] = pipeline.vq_sae_dir
+    else:
+        summary['sae_dir'] = pipeline.sae_dir
 
     for split_idx, split in enumerate(args.splits):
         available = split_to_indices.get(split, None)
