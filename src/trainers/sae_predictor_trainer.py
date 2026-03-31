@@ -148,7 +148,7 @@ class SAEPredictorTrainer(BaseTrainer):
         mesh, mesh2 = load_mesh(mesh_name)
 
         Nel = 32
-        z = 1e-6 * np.ones((Nel, 1))
+        z = 1e-6 * np.ones(Nel)
         vincl = np.ones((Nel - 1, 76), dtype=bool)
 
         solver = EITFEM(mesh2, Injref, Mpat, vincl)
