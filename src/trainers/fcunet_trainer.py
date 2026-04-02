@@ -434,8 +434,7 @@ class FCUNetTrainer(BaseTrainer):
         if resume_path:
             self._load_checkpoint(resume_path)
 
-        from torch.utils.tensorboard import SummaryWriter
-        self.writer = SummaryWriter(log_dir=self.result_dir)
+        self._init_writer()
         self._save_config()
 
         max_iters = self.config.training.get('max_iters', None)

@@ -1,0 +1,27 @@
+{
+  "family": "vq_sae",
+  "predictor_dir": "results\\vq_sae_predictor_compact_4",
+  "hdf5_path": "dataset_sim/level_1/data.h5",
+  "level": 1,
+  "rows": 2,
+  "cols": 4,
+  "batch_size": 8,
+  "seed": 1,
+  "splits": {
+    "test": {
+      "indices": [
+        1306,
+        2180,
+        12113,
+        7906,
+        5331,
+        2077,
+        8090,
+        4440
+      ],
+      "plot": "results\\vq_sae_predictor_compact_4\\ae_sim_samples_1\\test_comparison.png",
+      "num_samples": 8
+    }
+  },
+  "vq_sae_dir": "results\\vq_sae_baseline_4"
+}

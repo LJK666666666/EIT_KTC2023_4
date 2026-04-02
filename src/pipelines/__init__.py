@@ -5,3 +5,5 @@ from .dpcaunet_pipeline import DPCAUNetPipeline
 from .hcdpcaunet_pipeline import HCDPCAUNetPipeline
 from .sae_pipeline import SAEPipeline
 from .vq_sae_pipeline import VQSAEPipeline
+from .dct_predictor_pipeline import DCTPredictorPipeline
+from .dct_predictor_ensemble_pipeline import DCTPredictorEnsemblePipeline

@@ -27,11 +27,6 @@ def get_configs():
     # SAE-specific losses
     training.l1_lambda = 1e-3       # L1 sparsity on z_shape
     training.equiv_lambda = 0.1     # Rotation equivariance loss
-    training.ce_weight = 1.0
-    training.dice_weight = 1.0
-    training.latent_noise_std = 0.05   # Noise injected into z_shape before decode
-    training.decoder_finetune = False  # Freeze encoder/angle, fine-tune decoder only
-    training.pretrained_checkpoint = ''
 
     # Model
     config.model = model = ml_collections.ConfigDict()

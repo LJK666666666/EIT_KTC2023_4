@@ -21,7 +21,6 @@ from .base_trainer import BaseTrainer
 from ..configs.sae_config import get_configs as get_sae_config
 from ..models.sae import SparseAutoEncoder
 from ..data import GTHDF5Dataset
-from ..losses.dice_focal import DiceLoss
 
 
 class SAETrainer(BaseTrainer):
@@ -31,23 +30,6 @@ class SAETrainer(BaseTrainer):
         if config is None:
             config = get_sae_config()
         super().__init__(config, experiment_name)
-        self.dice_loss = DiceLoss()
-
-    def _freeze_encoder_modules(self):
-        """Freeze angle_cnn and encoder; keep decoder trainable."""
-        for p in self.model.angle_cnn.parameters():
-            p.requires_grad = False
-        for p in self.model.encoder.parameters():
-            p.requires_grad = False
-        for p in self.model.decoder.parameters():
-            p.requires_grad = True
-
-    def _add_latent_noise(self, z_shape):
-        """Add mild Gaussian noise to z_shape during training only."""
-        noise_std = self.config.training.get('latent_noise_std', 0.0)
-        if noise_std <= 0 or not self.model.training:
-            return z_shape
-        return z_shape + noise_std * torch.randn_like(z_shape)
 
     def build_model(self):
         model = SparseAutoEncoder(
@@ -56,32 +38,12 @@ class SAETrainer(BaseTrainer):
             shape_dim=self.config.model.shape_dim,
             decoder_start_size=self.config.model.decoder_start_size,
         )
-
-        pretrained_checkpoint = self.config.training.get(
-            'pretrained_checkpoint', '')
-        if pretrained_checkpoint:
-            state = torch.load(pretrained_checkpoint, map_location=self.device,
-                               weights_only=False)
-            model.load_state_dict(state.get('model_state_dict', state))
-            print(f'Loaded pretrained SAE weights from {pretrained_checkpoint}')
-
         model.to(self.device)
         self.model = model
 
-        if self.config.training.get('decoder_finetune', False):
-            if not pretrained_checkpoint:
-                raise ValueError(
-                    'decoder_finetune=True requires training.pretrained_checkpoint '
-                    'or --sae-checkpoint')
-            self._freeze_encoder_modules()
-            trainable_params = [p for p in model.parameters() if p.requires_grad]
-            print('SAE mode: decoder fine-tune with frozen angle_cnn + encoder')
-        else:
-            trainable_params = model.parameters()
-
         wd = self.config.training.get('weight_decay', 1e-4)
         self.optimizer = torch.optim.AdamW(
-            trainable_params, lr=self.config.training.lr,
+            model.parameters(), lr=self.config.training.lr,
             weight_decay=wd)
 
         self.scheduler = lr_scheduler.ReduceLROnPlateau(
@@ -157,7 +119,7 @@ class SAETrainer(BaseTrainer):
         ], dtype=image.dtype, device=image.device).unsqueeze(0).expand(B, -1, -1)
 
         grid = F.affine_grid(theta, image.shape, align_corners=False)
-        mode = 'bilinear' if self.model.training else 'nearest'
+        mode = 'bilinear' if self.training else 'nearest'
         return F.grid_sample(image, grid, mode=mode,
                              padding_mode='zeros', align_corners=False)
 
@@ -167,49 +129,28 @@ class SAETrainer(BaseTrainer):
         gt_indices = gt_indices.to(self.device)
 
         self.optimizer.zero_grad()
-        ce_weight = float(self.config.training.get('ce_weight', 1.0))
-        dice_weight = float(self.config.training.get('dice_weight', 1.0))
 
-        decoder_finetune = self.config.training.get('decoder_finetune', False)
-        if decoder_finetune:
-            with torch.no_grad():
-                with self._autocast_context():
-                    z_shape, angle_xy = self.model.encode(gt_onehot)
-            z_shape_noisy = self._add_latent_noise(z_shape)
+        with self._autocast_context():
+            logits, z_shape, angle_xy = self.model(gt_onehot)
 
-            with self._autocast_context():
-                logits = self.model.decode(z_shape_noisy, angle_xy)
-                ce_loss = F.cross_entropy(logits, gt_indices)
-                dice_loss = self.dice_loss(logits, gt_indices)
-                recon_loss = ce_weight * ce_loss + dice_weight * dice_loss
-                sparsity_loss = torch.tensor(0.0, device=self.device)
+            # CrossEntropy reconstruction loss
+            recon_loss = F.cross_entropy(logits, gt_indices)
+
+            # L1 sparsity on z_shape only
+            l1_lambda = self.config.training.l1_lambda
+            sparsity_loss = l1_lambda * torch.mean(torch.abs(z_shape))
+
+            # Equivariance loss: ensure z_shape is rotation-invariant
+            equiv_lambda = self.config.training.equiv_lambda
+            if equiv_lambda > 0:
+                k = random.randint(1, 31)
+                gt_rotated = self._rotate_image(gt_onehot, k)
+                z_shape_rot, _ = self.model.encode(gt_rotated)
+                equiv_loss = equiv_lambda * F.mse_loss(z_shape_rot, z_shape)
+            else:
                 equiv_loss = torch.tensor(0.0, device=self.device)
-                total_loss = recon_loss
-        else:
-            with self._autocast_context():
-                z_shape, angle_xy = self.model.encode(gt_onehot)
-                z_shape_noisy = self._add_latent_noise(z_shape)
-                logits = self.model.decode(z_shape_noisy, angle_xy)
 
-                ce_loss = F.cross_entropy(logits, gt_indices)
-                dice_loss = self.dice_loss(logits, gt_indices)
-                recon_loss = ce_weight * ce_loss + dice_weight * dice_loss
-
-                # L1 sparsity on clean z_shape only
-                l1_lambda = self.config.training.l1_lambda
-                sparsity_loss = l1_lambda * torch.mean(torch.abs(z_shape))
-
-                # Equivariance loss: ensure z_shape is rotation-invariant
-                equiv_lambda = self.config.training.equiv_lambda
-                if equiv_lambda > 0:
-                    k = random.randint(1, 31)
-                    gt_rotated = self._rotate_image(gt_onehot, k)
-                    z_shape_rot, _ = self.model.encode(gt_rotated)
-                    equiv_loss = equiv_lambda * F.mse_loss(z_shape_rot, z_shape)
-                else:
-                    equiv_loss = torch.tensor(0.0, device=self.device)
-
-                total_loss = recon_loss + sparsity_loss + equiv_loss
+            total_loss = recon_loss + sparsity_loss + equiv_loss
 
         total_loss.backward()
         grad_clip = self.config.training.get('grad_clip_norm', 1.0)
@@ -219,8 +160,6 @@ class SAETrainer(BaseTrainer):
         return {
             'loss': total_loss.item(),
             'recon_loss': recon_loss.item(),
-            'ce_loss': ce_loss.item(),
-            'dice_loss': dice_loss.item(),
             'sparsity_loss': sparsity_loss.item(),
             'equiv_loss': equiv_loss.item(),
         }
@@ -231,8 +170,6 @@ class SAETrainer(BaseTrainer):
 
         total_loss = 0.0
         num_samples = 0
-        ce_weight = float(self.config.training.get('ce_weight', 1.0))
-        dice_weight = float(self.config.training.get('dice_weight', 1.0))
 
         for gt_onehot, gt_indices in self.val_sim_loader:
             gt_onehot = gt_onehot.to(self.device)
@@ -240,12 +177,8 @@ class SAETrainer(BaseTrainer):
 
             with torch.no_grad():
                 with self._autocast_context():
-                    z_shape, angle_xy = self.model.encode(gt_onehot)
-                    logits = self.model.decode(z_shape, angle_xy)
-                    loss = (
-                        ce_weight * F.cross_entropy(logits, gt_indices)
-                        + dice_weight * self.dice_loss(logits, gt_indices)
-                    )
+                    logits, z_shape, _ = self.model(gt_onehot)
+                    loss = F.cross_entropy(logits, gt_indices)
             total_loss += loss.item() * gt_onehot.shape[0]
             num_samples += gt_onehot.shape[0]
 

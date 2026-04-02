@@ -1,6 +1,7 @@
 """Inference pipeline for VQ SAE predictor + frozen VQ SAE decoder."""
 
 import os
+import json
 
 import numpy as np
 import torch
@@ -23,6 +24,7 @@ class VQSAEPipeline(BasePipeline):
         self.predictor_dir_override = predictor_dir_override
         self.predictor_dir = None
         self.vq_sae_dir = None
+        self.slot_vocab_values = None
 
     def _load_pipeline_config(self):
         if not self.config_path or not os.path.exists(self.config_path):
@@ -36,7 +38,12 @@ class VQSAEPipeline(BasePipeline):
         while True:
             d = os.path.join(self.weights_base_dir, f'{prefix}_{num}')
             if os.path.exists(d):
-                latest = d
+                has_weight = (
+                    os.path.exists(os.path.join(d, 'best.pt'))
+                    or os.path.exists(os.path.join(d, 'last.pt'))
+                )
+                if has_weight:
+                    latest = d
                 num += 1
             else:
                 break
@@ -54,6 +61,14 @@ class VQSAEPipeline(BasePipeline):
         path = os.path.join(result_dir, 'config.yaml')
         with open(path, 'r') as f:
             return yaml.unsafe_load(f)
+
+    @staticmethod
+    def _load_slot_vocab(result_dir):
+        path = os.path.join(result_dir, 'slot_vocab.json')
+        if not os.path.exists(path):
+            return None
+        with open(path, 'r', encoding='utf-8') as f:
+            return json.load(f)
 
     def load_model(self, level):
         if self.predictor is not None:
@@ -85,12 +100,14 @@ class VQSAEPipeline(BasePipeline):
                 f'Cannot find paired VQ SAE directory. Searched in {self.weights_base_dir}')
         sae_cfg = self._load_result_config(vq_sae_dir)
 
+        slot_vocab = self._load_slot_vocab(predictor_dir)
         predictor = VQMeasurementPredictor(
             input_dim=pred_cfg['model']['input_dim'],
             hidden_dims=tuple(pred_cfg['model']['hidden_dims']),
             num_slots=pred_cfg['model']['num_slots'],
             codebook_size=pred_cfg['model']['codebook_size'],
             dropout=pred_cfg['model']['dropout'],
+            slot_num_classes=(slot_vocab or {}).get('slot_num_classes', None),
         )
         pred_path = self._find_weight([
             os.path.join(predictor_dir, 'best.pt'),
@@ -121,6 +138,8 @@ class VQSAEPipeline(BasePipeline):
         self.vq_sae = vq_sae
         self.predictor_dir = predictor_dir
         self.vq_sae_dir = vq_sae_dir
+        self.slot_vocab_values = (slot_vocab.get('slot_vocab_values')
+                                  if slot_vocab else None)
         print(f'VQSAEPipeline loaded: predictor={pred_path}, vq_sae={sae_path}')
 
     def _prepare_input(self, Uel, ref_data, level):
@@ -134,6 +153,21 @@ class VQSAEPipeline(BasePipeline):
     def reconstruct(self, Uel, ref_data, level):
         return self.reconstruct_batch([Uel], ref_data, level)[0]
 
+
+    def _decode_slot_logits(self, slot_logits):
+        if isinstance(slot_logits, list):
+            local_indices = [torch.argmax(logits, dim=-1) for logits in slot_logits]
+            slot_indices = []
+            for slot_idx, local_idx in enumerate(local_indices):
+                vocab = torch.as_tensor(
+                    self.slot_vocab_values[slot_idx],
+                    device=local_idx.device,
+                    dtype=torch.long,
+                )
+                slot_indices.append(vocab[local_idx.long()])
+            return torch.stack(slot_indices, dim=1)
+        return torch.argmax(slot_logits, dim=-1)
+
     def reconstruct_batch(self, Uel_list, ref_data, level):
         y_batch = [self._prepare_input(Uel, ref_data, level) for Uel in Uel_list]
         y_tensor = torch.from_numpy(np.stack(y_batch).astype(np.float32)).to(
@@ -141,7 +175,7 @@ class VQSAEPipeline(BasePipeline):
         with torch.no_grad():
             with self._autocast_context():
                 slot_logits, angle_xy = self.predictor(y_tensor)
-                slot_indices = torch.argmax(slot_logits, dim=-1)
+                slot_indices = self._decode_slot_logits(slot_logits)
                 logits = self.vq_sae.decode_from_indices(slot_indices, angle_xy)
                 pred = torch.argmax(logits, dim=1)
         pred_np = pred.cpu().numpy().astype(int)
@@ -157,7 +191,7 @@ class VQSAEPipeline(BasePipeline):
         with torch.no_grad():
             with self._autocast_context():
                 slot_logits, angle_xy = self.predictor(y_tensor)
-                slot_indices = torch.argmax(slot_logits, dim=-1)
+                slot_indices = self._decode_slot_logits(slot_logits)
                 logits = self.vq_sae.decode_from_indices(slot_indices, angle_xy)
                 pred = torch.argmax(logits, dim=1)
         return [arr for arr in pred.cpu().numpy().astype(int)]

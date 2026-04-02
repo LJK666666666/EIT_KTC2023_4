@@ -71,12 +71,12 @@ class FCUNetPipeline(BasePipeline):
     def _prepare_input(self, Uel: np.ndarray, ref_data: dict, level: int):
         """Prepare one flattened masked input sample."""
         Injref = ref_data['Injref']
-        Uelref = ref_data['Uelref']
+        Uelref = np.asarray(ref_data['Uelref']).reshape(-1)
         vincl = self.create_vincl(level, Injref).T.flatten()
 
-        y = np.array(Uel) - np.array(Uelref)
+        y = np.asarray(Uel).reshape(-1) - Uelref
         y[~vincl] = 0
-        return np.asarray(y).reshape(-1)
+        return np.asarray(y, dtype=np.float32).reshape(-1)
 
     def reconstruct_batch(self, Uels, ref_data: dict, level: int):
         """Batch reconstruction for identical results with lower overhead."""

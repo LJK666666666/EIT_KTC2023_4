@@ -49,13 +49,15 @@ def parse_args():
     parser.add_argument('--method', type=str, required=True,
                         choices=['fcunet', 'postp', 'condd', 'dpcaunet',
                                  'hcdpcaunet', 'sae', 'sae_predictor',
-                                 'vq_sae', 'vq_sae_predictor'],
+                                 'vq_sae', 'vq_sae_predictor',
+                                 'dct_predictor'],
                         help='Training method')
     parser.add_argument('--level', type=int, default=1,
                         help='Difficulty level for CondD (1-7)')
 
     # Override hyperparameters
     parser.add_argument('--epochs', type=int, default=None)
+    parser.add_argument('--init-epochs', type=int, default=None)
     parser.add_argument('--batch-size', type=int, default=None)
     parser.add_argument('--lr', type=float, default=None)
     parser.add_argument('--max-iters', type=int, default=None,
@@ -79,28 +81,43 @@ def parse_args():
 
     # SAE predictor specific
     parser.add_argument('--sae-checkpoint', type=str, default=None,
-                        help='Path to trained SAE best.pt '
-                             '(for sae decoder fine-tune or sae_predictor)')
+                        help='Path to trained SAE best.pt (for sae_predictor)')
     parser.add_argument('--latent-h5-path', type=str, default=None,
                         help='Path to latent_codes.h5 (for sae_predictor)')
     parser.add_argument('--vq-sae-checkpoint', type=str, default=None,
                         help='Path to trained VQ SAE best.pt '
                              '(for vq_sae_predictor)')
     parser.add_argument('--vq-latent-h5-path', type=str, default=None,
-                        help='Path to VQ latent_codes.h5 (for vq_sae_predictor)')
-    parser.add_argument('--latent-noise-std', type=float, default=None,
-                        help='Std of Gaussian noise added to SAE z_shape')
-    parser.add_argument('--decoder-finetune', action='store_true',
-                        help='For sae: load pretrained checkpoint and freeze '
-                             'encoder/angle modules, training decoder only')
-    parser.add_argument('--use-image-loss', action='store_true',
-                        help='For sae_predictor: add frozen SAE decoder image loss')
-    parser.add_argument('--image-loss-switch-ratio', type=float, default=None,
-                        help='For sae_predictor: epoch ratio before enabling image loss ramp')
-    parser.add_argument('--image-loss-weight-start', type=float, default=None,
-                        help='For sae_predictor: image loss weight at ramp start')
-    parser.add_argument('--image-loss-weight-end', type=float, default=None,
-                        help='For sae_predictor: image loss weight at ramp end')
+                        help='Path to VQ latent_codes.h5 '
+                             '(for vq_sae_predictor)')
+    parser.add_argument('--num-slots', type=int, default=None,
+                        help='Override VQ num_slots')
+    parser.add_argument('--codebook-size', type=int, default=None,
+                        help='Override VQ codebook size')
+    parser.add_argument('--code-dim', type=int, default=None,
+                        help='Override VQ code dimension')
+    parser.add_argument('--vq-beta', type=float, default=None,
+                        help='Override VQ commitment beta')
+    parser.add_argument('--lambda-slot', type=float, default=None,
+                        help='Override predictor slot loss weight')
+    parser.add_argument('--lambda-image', type=float, default=None,
+                        help='Override predictor image loss weight')
+    parser.add_argument('--lambda-angle', type=float, default=None,
+                        help='Override predictor angle loss weight')
+    parser.add_argument('--coeff-size', type=int, default=None,
+                        help='Override DCT coefficient size')
+    parser.add_argument('--coeff-loss-weight', type=float, default=None,
+                        help='Override DCT coefficient regression loss weight')
+    parser.add_argument('--ce-weight', type=float, default=None,
+                        help='Override cross-entropy loss weight')
+    parser.add_argument('--dice-weight', type=float, default=None,
+                        help='Override Dice loss weight')
+    parser.add_argument('--dropout', type=float, default=None,
+                        help='Override model dropout')
+    parser.add_argument('--fixed-level', type=int, default=None,
+                        help='Train/validate on a fixed level only')
+    parser.add_argument('--score-probe-max-samples', type=int, default=None,
+                        help='Max validation samples used for fast probe score')
 
     # Misc
     parser.add_argument('--seed', type=int, default=None,
@@ -170,19 +187,8 @@ def main():
         from src.trainers import SAETrainer
 
         config = get_sae_config()
-        if args.experiment_name is not None:
-            name = args.experiment_name
-        elif args.decoder_finetune and args.sae_checkpoint:
-            ckpt_dir_name = os.path.basename(
-                os.path.dirname(os.path.normpath(args.sae_checkpoint)))
-            name = f'{ckpt_dir_name}_decoder_ft'
-        else:
-            name = 'sae_baseline'
+        name = args.experiment_name or 'sae_baseline'
         _apply_overrides(config, args)
-        if args.sae_checkpoint:
-            config.training.pretrained_checkpoint = args.sae_checkpoint
-        if args.decoder_finetune:
-            config.training.decoder_finetune = True
         trainer = SAETrainer(config=config, experiment_name=name)
 
     elif args.method == 'sae_predictor':
@@ -219,7 +225,18 @@ def main():
             config.vq_sae.checkpoint = args.vq_sae_checkpoint
         if args.vq_latent_h5_path:
             config.vq_sae.latent_h5_path = args.vq_latent_h5_path
+        elif args.latent_h5_path:
+            config.vq_sae.latent_h5_path = args.latent_h5_path
         trainer = VQSAEPredictorTrainer(config=config, experiment_name=name)
+
+    elif args.method == 'dct_predictor':
+        from src.configs import get_dct_predictor_config
+        from src.trainers import DCTPredictorTrainer
+
+        config = get_dct_predictor_config()
+        name = args.experiment_name or 'dct_predictor_baseline'
+        _apply_overrides(config, args)
+        trainer = DCTPredictorTrainer(config=config, experiment_name=name)
 
     else:
         print(f'Unknown method: {args.method}')
@@ -292,6 +309,8 @@ def _apply_overrides(config, args):
     """Apply CLI argument overrides to config."""
     if args.epochs is not None:
         config.training.epochs = args.epochs
+    if args.init_epochs is not None and 'init_epochs' in config.training:
+        config.training.init_epochs = args.init_epochs
     if args.batch_size is not None:
         config.training.batch_size = args.batch_size
     if args.lr is not None:
@@ -311,16 +330,34 @@ def _apply_overrides(config, args):
         config.training.precision = args.precision
     if args.result_base_dir is not None:
         config.result_base_dir = args.result_base_dir
-    if args.latent_noise_std is not None and hasattr(config, 'training'):
-        config.training.latent_noise_std = args.latent_noise_std
-    if args.use_image_loss and hasattr(config, 'training'):
-        config.training.use_image_loss = True
-    if args.image_loss_switch_ratio is not None and hasattr(config, 'training'):
-        config.training.image_loss_switch_ratio = args.image_loss_switch_ratio
-    if args.image_loss_weight_start is not None and hasattr(config, 'training'):
-        config.training.image_loss_weight_start = args.image_loss_weight_start
-    if args.image_loss_weight_end is not None and hasattr(config, 'training'):
-        config.training.image_loss_weight_end = args.image_loss_weight_end
+    if args.num_slots is not None and hasattr(config, 'model'):
+        config.model.num_slots = args.num_slots
+    if args.codebook_size is not None and hasattr(config, 'model'):
+        config.model.codebook_size = args.codebook_size
+    if args.code_dim is not None and hasattr(config, 'model'):
+        config.model.code_dim = args.code_dim
+    if args.vq_beta is not None:
+        config.training.vq_beta = args.vq_beta
+    if args.lambda_slot is not None:
+        config.training.lambda_slot = args.lambda_slot
+    if args.lambda_image is not None:
+        config.training.lambda_image = args.lambda_image
+    if args.lambda_angle is not None:
+        config.training.lambda_angle = args.lambda_angle
+    if args.coeff_size is not None and hasattr(config, 'model'):
+        config.model.coeff_size = args.coeff_size
+    if args.coeff_loss_weight is not None:
+        config.training.coeff_loss_weight = args.coeff_loss_weight
+    if args.ce_weight is not None:
+        config.training.ce_weight = args.ce_weight
+    if args.dice_weight is not None:
+        config.training.dice_weight = args.dice_weight
+    if args.dropout is not None and hasattr(config, 'model'):
+        config.model.dropout = args.dropout
+    if args.fixed_level is not None:
+        config.training.fixed_level = args.fixed_level
+    if args.score_probe_max_samples is not None:
+        config.training.score_probe_max_samples = args.score_probe_max_samples
 
 
 if __name__ == '__main__':

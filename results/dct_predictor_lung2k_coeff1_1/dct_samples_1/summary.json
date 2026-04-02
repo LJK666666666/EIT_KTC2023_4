@@ -1,0 +1,15 @@
+{
+  "weights_dir": "results/dct_predictor_lung2k_coeff1_1",
+  "hdf5_path": "dataset_lung_2k/level_1/data.h5",
+  "split": "test",
+  "indices": [
+    749,
+    243,
+    183,
+    144,
+    1502,
+    266,
+    627,
+    1312
+  ]
+}

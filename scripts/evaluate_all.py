@@ -25,8 +25,8 @@ from tqdm import tqdm
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.data.eval_dataset import EvaluationDataLoader
-from src.evaluation.scoring import FastScoringFunction, scoring_function
-from src.evaluation.scoring_torch import TorchFastScorer
+from src.evaluation.scoring import scoring_function
+from src.evaluation.scoring_torch import fast_score_auto, fast_score_batch_auto
 from src.evaluation.visualization import (
     plot_reconstruction_comparison,
     plot_method_overview,
@@ -54,35 +54,7 @@ def get_output_dir(method_name, base_dir='results'):
         num += 1
 
 
-def resolve_score_device(device_arg):
-    if device_arg == 'auto':
-        return 'cuda' if __import__('torch').cuda.is_available() else 'cpu'
-    return device_arg
-
-
-def build_scorer(score_mode, score_device):
-    if score_mode == 'official':
-        return {'mode': 'official', 'single_fn': scoring_function, 'batch_obj': None}
-    if score_mode == 'fast':
-        return {'mode': 'fast', 'single_fn': FastScoringFunction, 'batch_obj': None}
-    if score_mode == 'torch':
-        return {
-            'mode': 'torch',
-            'single_fn': None,
-            'batch_obj': TorchFastScorer(device=score_device),
-        }
-    raise ValueError(f'Unknown score mode: {score_mode}')
-
-
-def score_reconstructions(ground_truths, reconstructions, scorer):
-    if scorer['mode'] == 'torch':
-        return scorer['batch_obj'].score_batch(ground_truths, reconstructions)
-    return [scorer['single_fn'](gt, reco)
-            for gt, reco in zip(ground_truths, reconstructions)]
-
-
-def build_pipeline(method_name, device, weights_base_dir, batch_mode,
-                   sae_config_path, vq_sae_config_path):
+def build_pipeline(method_name, device, weights_base_dir, batch_mode):
     """Build a pipeline instance by method name."""
     if method_name == 'fcunet':
         from src.pipelines import FCUNetPipeline
@@ -102,24 +74,54 @@ def build_pipeline(method_name, device, weights_base_dir, batch_mode,
         return HCDPCAUNetPipeline(device=device, weights_base_dir=weights_base_dir)
     elif method_name == 'sae':
         from src.pipelines import SAEPipeline
-        return SAEPipeline(
-            device=device,
-            weights_base_dir=weights_base_dir,
-            config_path=sae_config_path,
-        )
+        return SAEPipeline(device=device, weights_base_dir=weights_base_dir)
     elif method_name == 'vq_sae':
         from src.pipelines import VQSAEPipeline
-        return VQSAEPipeline(
+        return VQSAEPipeline(device=device, weights_base_dir=weights_base_dir)
+    elif method_name == 'dct_predictor':
+        from src.pipelines import DCTPredictorPipeline
+        return DCTPredictorPipeline(device=device, weights_base_dir=weights_base_dir)
+    elif method_name == 'dct_predictor_ensemble':
+        from src.pipelines import DCTPredictorEnsemblePipeline
+        return DCTPredictorEnsemblePipeline(
             device=device,
             weights_base_dir=weights_base_dir,
-            config_path=vq_sae_config_path,
+            config_path='scripts/dct_predictor_ensemble.yaml',
         )
     else:
         raise ValueError(f'Unknown method: {method_name}')
 
 
+def score_one(groundtruth, reconstruction, score_mode='official',
+              score_device=None):
+    """Score a single sample using the requested scoring backend."""
+    if score_mode == 'official':
+        return float(scoring_function(groundtruth, reconstruction))
+    if score_mode in ('fast', 'torch'):
+        return float(fast_score_auto(
+            groundtruth, reconstruction, device=score_device))
+    raise ValueError(f'Unknown score mode: {score_mode}')
+
+
+def score_many(groundtruths, reconstructions, score_mode='official',
+               score_device=None):
+    """Score a batch of samples using the requested scoring backend."""
+    if score_mode == 'official':
+        return [
+            float(scoring_function(gt, reco))
+            for gt, reco in zip(groundtruths, reconstructions)
+        ]
+    if score_mode in ('fast', 'torch'):
+        return [
+            float(x) for x in fast_score_batch_auto(
+                groundtruths, reconstructions, device=score_device)
+        ]
+    raise ValueError(f'Unknown score mode: {score_mode}')
+
+
 def evaluate_method(method_name, pipeline, levels, eval_loader, output_dir,
-                    scorer, save_mat=True, save_plots=True):
+                    save_mat=True, save_plots=True, score_mode='official',
+                    score_device=None):
     """Evaluate a single method across the specified levels.
 
     Returns:
@@ -168,7 +170,10 @@ def evaluate_method(method_name, pipeline, levels, eval_loader, output_dir,
             ground_truths = per_level_inputs[level]['ground_truths']
             reconstructions = per_level_reconstructions[level]
             t_score = time.time()
-            scores = score_reconstructions(ground_truths, reconstructions, scorer)
+            scores = score_many(
+                ground_truths[:len(reconstructions)], reconstructions,
+                score_mode=score_mode, score_device=score_device
+            )
             score_elapsed = time.time() - t_score
 
             sum_score = float(np.sum(scores))
@@ -187,7 +192,7 @@ def evaluate_method(method_name, pipeline, levels, eval_loader, output_dir,
 
             print(f'    Scores: {[f"{s:.4f}" for s in scores]}')
             print(f'    Sum: {sum_score:.4f}, Mean: {mean_score:.4f}')
-            print(f'    Score time: {score_elapsed:.3f}s')
+            print(f'    Score time: {score_elapsed:.2f}s')
 
             if save_mat:
                 level_dir = os.path.join(output_dir, f'level_{level}')
@@ -225,13 +230,15 @@ def evaluate_method(method_name, pipeline, levels, eval_loader, output_dir,
             t0 = time.time()
             reconstructions = pipeline.reconstruct_batch(
                 measurements, ref_data, level)
-            elapsed = time.time() - t0
-
+            reco_elapsed = time.time() - t0
             t_score = time.time()
-            scores = score_reconstructions(ground_truths, reconstructions, scorer)
+            scores = score_many(
+                ground_truths[:len(reconstructions)], reconstructions,
+                score_mode=score_mode, score_device=score_device
+            )
             score_elapsed = time.time() - t_score
-            print(f'    Reconstruction time: {elapsed:.3f}s')
-            print(f'    Score time: {score_elapsed:.3f}s')
+            print(f'    Reconstruction time: {reco_elapsed:.2f}s')
+            print(f'    Score time: {score_elapsed:.2f}s')
         else:
             pbar = tqdm(enumerate(measurements), total=len(measurements),
                         desc='    Reconstructing', leave=False)
@@ -241,12 +248,14 @@ def evaluate_method(method_name, pipeline, levels, eval_loader, output_dir,
                 elapsed = time.time() - t0
                 reconstructions.append(reco)
 
-                pbar.set_postfix(time=f'{elapsed:.1f}s')
-
-            t_score = time.time()
-            scores = score_reconstructions(ground_truths, reconstructions, scorer)
-            score_elapsed = time.time() - t_score
-            print(f'    Score time: {score_elapsed:.3f}s')
+                if i < len(ground_truths):
+                    score = score_one(
+                        ground_truths[i], reco,
+                        score_mode=score_mode, score_device=score_device
+                    )
+                    scores.append(score)
+                    pbar.set_postfix(score=f'{score:.4f}',
+                                     time=f'{elapsed:.1f}s')
 
         sum_score = float(np.sum(scores))
         mean_score = float(np.mean(scores)) if scores else 0.0
@@ -333,7 +342,8 @@ def main():
     parser = argparse.ArgumentParser(description='Evaluate KTC2023 EIT reconstruction methods')
     parser.add_argument('--methods', nargs='+', default=['fcunet', 'postp', 'condd'],
                         choices=['fcunet', 'postp', 'condd', 'dpcaunet',
-                                 'hcdpcaunet', 'sae', 'vq_sae'],
+                                 'hcdpcaunet', 'sae', 'vq_sae',
+                                 'dct_predictor', 'dct_predictor_ensemble'],
                         help='Methods to evaluate (default: all three)')
     parser.add_argument('--levels', nargs='+', type=int, default=list(range(1, 8)),
                         help='Difficulty levels to evaluate (default: 1-7)')
@@ -351,15 +361,11 @@ def main():
                         help='Skip saving .mat reconstruction files')
     parser.add_argument('--condd-sequential', action='store_true',
                         help='Run conditional diffusion in sequential mode (less VRAM)')
-    parser.add_argument('--sae-config', default='scripts/sae_pipeline.yaml',
-                        help='YAML config for sae_dir / sae_predictor_dir')
-    parser.add_argument('--vq-sae-config', default='scripts/vq_sae_pipeline.yaml',
-                        help='YAML config for vq_sae_dir / vq_sae_predictor_dir')
     parser.add_argument('--score-mode', default='official',
                         choices=['official', 'fast', 'torch'],
-                        help='Scoring implementation to use')
+                        help='Scoring backend (default: official)')
     parser.add_argument('--score-device', default='auto',
-                        help='Device for torch scoring (auto/cpu/cuda)')
+                        help='Score device for fast/torch scoring (auto/cpu/cuda)')
     args = parser.parse_args()
 
     eval_loader = EvaluationDataLoader(
@@ -370,10 +376,6 @@ def main():
     all_results = {}
     all_level_data = {}  # For cross-method comparison plots
     output_dirs = {}
-    score_device = resolve_score_device(args.score_device)
-    scorer = build_scorer(args.score_mode, score_device)
-    print(f'Score mode: {args.score_mode}'
-          + (f' ({score_device})' if args.score_mode == 'torch' else ''))
 
     for method in args.methods:
         print(f'\n{"=" * 60}')
@@ -385,9 +387,7 @@ def main():
         print(f'Results will be saved to: {output_dir}')
 
         batch_mode = not args.condd_sequential
-        pipeline = build_pipeline(
-            method, args.device, args.weights_dir, batch_mode,
-            args.sae_config, args.vq_sae_config)
+        pipeline = build_pipeline(method, args.device, args.weights_dir, batch_mode)
 
         results, level_data = evaluate_method(
             method_name=method,
@@ -395,9 +395,10 @@ def main():
             levels=args.levels,
             eval_loader=eval_loader,
             output_dir=output_dir,
-            scorer=scorer,
             save_mat=not args.no_mat,
             save_plots=not args.no_plot,
+            score_mode=args.score_mode,
+            score_device=None if args.score_device == 'auto' else args.score_device,
         )
 
         # Save per-method scores

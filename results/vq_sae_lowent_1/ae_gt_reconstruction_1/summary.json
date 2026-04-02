@@ -1,0 +1,11 @@
+{
+  "weights_dir": "results\\vq_sae_lowent_1",
+  "checkpoint": "results\\vq_sae_lowent_1\\best.pt",
+  "family": "vq_sae",
+  "device": "cuda",
+  "groups": {
+    "codes_python": {
+      "plot": "results\\vq_sae_lowent_1\\ae_gt_reconstruction_1\\codes_python_comparison.png"
+    }
+  }
+}

@@ -140,3 +140,5 @@ python scripts/visualize_sae_reconstruction.py --weights-dir results/vq_sae_base
 
 python scripts/evaluate_all.py --methods sae
 
+python scripts/train.py --method fcunet --resume results\fcunet_lung2k_2\last.pt --hdf5-path dataset_lung_2k\level_1\data.h5 --epochs 20 --batch-size 64 --num-workers 0 --device cuda
+

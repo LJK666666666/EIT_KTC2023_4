@@ -7,3 +7,4 @@ from .sae_config import get_configs as get_sae_config
 from .sae_predictor_config import get_configs as get_sae_predictor_config
 from .vq_sae_config import get_configs as get_vq_sae_config
 from .vq_sae_predictor_config import get_configs as get_vq_sae_predictor_config
+from .dct_predictor_config import get_configs as get_dct_predictor_config

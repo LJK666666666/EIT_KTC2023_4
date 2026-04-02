@@ -21,6 +21,15 @@ import torch
 from tqdm import tqdm
 
 
+class _NullWriter:
+    def add_scalar(self, *args, **kwargs):
+        pass
+
+    def close(self):
+        pass
+
+
+
 class BaseTrainer(ABC):
     """Abstract base class for all KTC2023 model trainers.
 
@@ -63,6 +72,26 @@ class BaseTrainer(ABC):
         # Early stopping state
         self._es_counter = 0
         self._es_best_val_loss = None
+
+    def _selection_metric_spec(self):
+        name = self.config.training.get('selection_metric', 'val_loss')
+        mode = self.config.training.get('selection_metric_mode', 'min')
+        if mode not in ('min', 'max'):
+            mode = 'min'
+        return name, mode
+
+    def _resolve_selection_metric(self, epoch_metrics, val_metrics):
+        name, mode = self._selection_metric_spec()
+        metric = None
+        if name in val_metrics:
+            metric = val_metrics[name]
+        elif name in epoch_metrics:
+            metric = epoch_metrics[name]
+        elif name == 'val_loss':
+            metric = val_metrics.get('val_loss', epoch_metrics.get('avg_loss'))
+        elif name == 'avg_loss':
+            metric = epoch_metrics.get('avg_loss')
+        return name, mode, metric
 
     def _autocast_context(self):
         """Return autocast context for bf16 training on CUDA/XLA, else no-op."""
@@ -124,6 +153,18 @@ class BaseTrainer(ABC):
                 f'divisible by batch_size={batch_size}; '
                 f'drop_last=True will drop {dropped} samples on XLA.'
             )
+
+    def _init_writer(self):
+        """Initialize SummaryWriter with safe fallback."""
+        if self.config.training.get('enable_tensorboard', False):
+            try:
+                from torch.utils.tensorboard import SummaryWriter
+                self.writer = SummaryWriter(log_dir=self.result_dir)
+            except Exception as exc:
+                print(f'Warning: TensorBoard disabled: {exc}')
+                self.writer = _NullWriter()
+        else:
+            self.writer = _NullWriter()
 
     # ------------------------------------------------------------------
     # Result directory management
@@ -214,8 +255,7 @@ class BaseTrainer(ABC):
         if resume_path:
             self._load_checkpoint(resume_path)
 
-        from torch.utils.tensorboard import SummaryWriter
-        self.writer = SummaryWriter(log_dir=self.result_dir)
+        self._init_writer()
         self._save_config()
 
         max_iters = self.config.training.get('max_iters', None)
@@ -246,8 +286,8 @@ class BaseTrainer(ABC):
 
             # ReduceLROnPlateau: step with val_loss (preferred) or avg_loss
             if self.scheduler is not None:
-                sched_metric = val_metrics.get(
-                    'val_loss', epoch_metrics.get('avg_loss'))
+                _, _, sched_metric = self._resolve_selection_metric(
+                    epoch_metrics, val_metrics)
                 if sched_metric is not None:
                     self.scheduler.step(sched_metric)
             all_metrics['lr'] = self.optimizer.param_groups[0]['lr']
@@ -260,22 +300,39 @@ class BaseTrainer(ABC):
             if save_freq > 0 and (epoch + 1) % save_freq == 0:
                 self._save_checkpoint('last.pt')
 
-            # Save best if val_loss improved (lower is better)
-            if 'val_loss' in val_metrics:
-                if (self.best_metric is None
-                        or val_metrics['val_loss'] < self.best_metric):
-                    self.best_metric = val_metrics['val_loss']
+            # Save best according to configured selection metric.
+            selection_name, selection_mode, selection_metric = (
+                self._resolve_selection_metric(epoch_metrics, val_metrics)
+            )
+            if selection_metric is not None:
+                is_better = (
+                    self.best_metric is None
+                    or (selection_mode == 'min' and selection_metric < self.best_metric)
+                    or (selection_mode == 'max' and selection_metric > self.best_metric)
+                )
+                if is_better:
+                    self.best_metric = selection_metric
                     self._save_checkpoint('best.pt')
-                    print(f'  New best val_loss: '
-                          f'{val_metrics["val_loss"]:.5f}')
+                    print(
+                        f'  New best {selection_name}: '
+                        f'{selection_metric:.5f}'
+                    )
 
-            # Early stopping based on val_loss (lower=better)
-            es_loss = val_metrics.get(
-                'val_loss', epoch_metrics.get('avg_loss'))
-            if es_loss is not None:
-                if (self._es_best_val_loss is None
-                        or es_loss < self._es_best_val_loss):
-                    self._es_best_val_loss = es_loss
+            # Early stopping based on the same configured selection metric.
+            if selection_metric is not None:
+                es_improved = (
+                    self._es_best_val_loss is None
+                    or (
+                        selection_mode == 'min'
+                        and selection_metric < self._es_best_val_loss
+                    )
+                    or (
+                        selection_mode == 'max'
+                        and selection_metric > self._es_best_val_loss
+                    )
+                )
+                if es_improved:
+                    self._es_best_val_loss = selection_metric
                     self._es_counter = 0
                 else:
                     self._es_counter += 1
@@ -286,9 +343,11 @@ class BaseTrainer(ABC):
             es_patience = self.config.training.get(
                 'early_stopping_patience', None)
             if es_patience and self._es_counter >= es_patience:
-                print(f'Early stopping: val_loss not improved for '
-                      f'{es_patience} epochs '
-                      f'(best={self._es_best_val_loss:.4f})')
+                print(
+                    f'Early stopping: {selection_name} not improved for '
+                    f'{es_patience} epochs '
+                    f'(best={self._es_best_val_loss:.4f})'
+                )
                 break
 
             if max_iters and self.global_step >= max_iters:

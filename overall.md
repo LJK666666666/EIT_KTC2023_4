@@ -1,6 +1,12 @@
-dpcaunet: @GUIDE\update7.md，已舍弃，与低频图像特征不符。
-hcdpcaunet: @GUIDE\HC-DPCA-UNet.md，已舍弃，与低频图像特征不符。
-SAE: @GUIDE\nn_3.md
-ST-1D-VQ-VAE: @GUIDE\nn_4.md
-2D-DCT:
-Implicit SDF:
+目前研究成果总结：
+@GUIDE\data_generation_optimization.md 加速仿真数据生成
+@GUIDE\phantom_shape_generation.md 仿真数据的物体形状数量模拟，即仿真数据质量
+dpcaunet: @GUIDE\update7.md，已舍弃，逐像素离散化处理，与低频图像特征不符。
+hcdpcaunet: @GUIDE\HC-DPCA-UNet.md，已舍弃，逐像素离散化处理，与低频图像特征不符。
+SAE: @GUIDE\nn_3.md，自编码器重建效果还可以，但是电极测量数据MLP_predictor的重建效果很差（即使解冻解码器）。可能可以考虑扩展SAE的编码特征向量维度；或者将sae改成vae，并在训练MLP_predictor时只预测均值并不施加噪声来计算解码图像（实际上已有该研究的论文，不过数据和代码似乎均未开源）；或者通过生成器、判别器方式对某个部分进行训练确保其重建的是规则的图像；或者将编码器、解码器、编码器、解码器不断堆叠，所有编码器和解码器同步参数（或者以某种方式关联），损失以首尾的原始特征重建损失和编码特征重建损失为主，其他辅助损失，通过多层堆叠放大误差，进行训练；或者你仔细分析问题的根因所在并自发进行调整。
+ST-1D-VQ-VAE: @GUIDE\nn_4.md，自编码器重建效果还可以，但是电极测量数据MLP_predictor的重建效果较差（冻结解码器），但图像较规则，可能是某部分复杂性不够，具体原因尚未排查，尚未进行改善尝试。
+2D-DCT: 尚未尝试，似乎已有相关研究，未进行具体考证。可考虑尝试。
+Implicit SDF: 尚未尝试。
+@GUIDE\gemini_chat.md ，包含许多重要的研究过程信息，但是篇幅可能较长。其中开头信息多为前期解决的问题，末尾信息更关注当前面临的问题，建议只阅读末尾部分的信息。
+目前需要完成肺部EIT的立项结题，所以还需要肺部相关数据，至少需要肺部仿真数据的相关研究结果，EIDORS库的相关肺部数据仿真工具已经较为完善，可以考虑使用。目标会议为ICIC (International Conference on Intelligent Computing)。
+

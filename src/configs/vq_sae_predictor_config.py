@@ -18,6 +18,13 @@ def get_configs():
     training.scheduler_factor = 0.5
     training.early_stopping_patience = 30
     training.lambda_angle = 0.5
+    training.lambda_slot = 1.0
+    training.lambda_image = 1.0
+    training.ce_weight = 1.0
+    training.dice_weight = 1.0
+    training.score_probe_freq = 1
+    training.selection_metric = 'val_probe_score_total'
+    training.selection_metric_mode = 'max'
 
     config.model = model = ml_collections.ConfigDict()
     model.input_dim = 2356

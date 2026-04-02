@@ -8,3 +8,4 @@ from .sae_trainer import SAETrainer
 from .sae_predictor_trainer import SAEPredictorTrainer
 from .vq_sae_trainer import VQSAETrainer
 from .vq_sae_predictor_trainer import VQSAEPredictorTrainer
+from .dct_predictor_trainer import DCTPredictorTrainer

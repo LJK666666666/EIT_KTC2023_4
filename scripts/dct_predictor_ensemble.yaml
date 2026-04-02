@@ -1,0 +1,5 @@
+members:
+  - result_dir: dct_predictor_c20_long_1
+    weight: 0.5
+  - result_dir: dct_predictor_probealign_1
+    weight: 0.5

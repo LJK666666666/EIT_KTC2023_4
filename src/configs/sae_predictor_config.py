@@ -24,8 +24,8 @@ def get_configs():
     training.early_stopping_patience = 30
 
     # Predictor-specific
-    training.ce_weight = 1.0
-    training.dice_weight = 1.0
+    training.lambda_angle = 0.5     # MSE weight for angle_xy vs shape
+    training.finetune_decoder = False  # Unfreeze SAE decoder for fine-tuning
 
     # Model
     config.model = model = ml_collections.ConfigDict()

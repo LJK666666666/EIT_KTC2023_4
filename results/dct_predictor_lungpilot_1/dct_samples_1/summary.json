@@ -1,0 +1,15 @@
+{
+  "weights_dir": "results/dct_predictor_lungpilot_1",
+  "hdf5_path": "dataset_lung_pilot/level_1/data.h5",
+  "split": "test",
+  "indices": [
+    203,
+    215,
+    115,
+    396,
+    144,
+    384,
+    281,
+    50
+  ]
+}

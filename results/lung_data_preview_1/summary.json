@@ -1,0 +1,8 @@
+{
+  "level": 1,
+  "num_images": 16,
+  "dataset_path": "dataset_lung/level_1/data.h5",
+  "avg_forward_ms": 134.6806138753891,
+  "avg_total_ms": 139.56508040428162,
+  "seed": 1
+}

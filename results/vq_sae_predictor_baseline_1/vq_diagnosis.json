@@ -1,0 +1,204 @@
+{
+  "overall_unique_codes": 35,
+  "slot_stats": [
+    {
+      "slot": 0,
+      "num_unique": 3,
+      "top_values": [
+        155,
+        490,
+        204
+      ],
+      "top_counts": [
+        7491,
+        5242,
+        67
+      ]
+    },
+    {
+      "slot": 1,
+      "num_unique": 1,
+      "top_values": [
+        445
+      ],
+      "top_counts": [
+        12800
+      ]
+    },
+    {
+      "slot": 2,
+      "num_unique": 2,
+      "top_values": [
+        341,
+        5
+      ],
+      "top_counts": [
+        8400,
+        4400
+      ]
+    },
+    {
+      "slot": 3,
+      "num_unique": 4,
+      "top_values": [
+        436,
+        75,
+        233,
+        291
+      ],
+      "top_counts": [
+        9936,
+        2856,
+        7,
+        1
+      ]
+    },
+    {
+      "slot": 4,
+      "num_unique": 2,
+      "top_values": [
+        71,
+        46
+      ],
+      "top_counts": [
+        12689,
+        111
+      ]
+    },
+    {
+      "slot": 5,
+      "num_unique": 2,
+      "top_values": [
+        360,
+        300
+      ],
+      "top_counts": [
+        12706,
+        94
+      ]
+    },
+    {
+      "slot": 6,
+      "num_unique": 2,
+      "top_values": [
+        251,
+        59
+      ],
+      "top_counts": [
+        12798,
+        2
+      ]
+    },
+    {
+      "slot": 7,
+      "num_unique": 1,
+      "top_values": [
+        355
+      ],
+      "top_counts": [
+        12800
+      ]
+    },
+    {
+      "slot": 8,
+      "num_unique": 1,
+      "top_values": [
+        384
+      ],
+      "top_counts": [
+        12800
+      ]
+    },
+    {
+      "slot": 9,
+      "num_unique": 4,
+      "top_values": [
+        237,
+        102,
+        137,
+        316
+      ],
+      "top_counts": [
+        12059,
+        738,
+        2,
+        1
+      ]
+    },
+    {
+      "slot": 10,
+      "num_unique": 1,
+      "top_values": [
+        221
+      ],
+      "top_counts": [
+        12800
+      ]
+    },
+    {
+      "slot": 11,
+      "num_unique": 2,
+      "top_values": [
+        412,
+        247
+      ],
+      "top_counts": [
+        12333,
+        467
+      ]
+    },
+    {
+      "slot": 12,
+      "num_unique": 1,
+      "top_values": [
+        305
+      ],
+      "top_counts": [
+        12800
+      ]
+    },
+    {
+      "slot": 13,
+      "num_unique": 4,
+      "top_values": [
+        231,
+        108,
+        318,
+        103
+      ],
+      "top_counts": [
+        8989,
+        2883,
+        802,
+        126
+      ]
+    },
+    {
+      "slot": 14,
+      "num_unique": 1,
+      "top_values": [
+        29
+      ],
+      "top_counts": [
+        12800
+      ]
+    },
+    {
+      "slot": 15,
+      "num_unique": 4,
+      "top_values": [
+        309,
+        161,
+        463,
+        379
+      ],
+      "top_counts": [
+        12636,
+        156,
+        7,
+        1
+      ]
+    }
+  ],
+  "val256_slot_acc": 0.031005859375
+}

@@ -9,15 +9,13 @@ Loads MLP predictor + SAE decoder. Reconstructs by:
 5. Rotate by +θ → argmax → segmentation
 """
 
+import glob
 import os
-import pickle
-import sys
 
 import h5py
 import numpy as np
 import torch
 import torch.nn.functional as F
-import yaml
 
 from .base_pipeline import BasePipeline
 from ..models.sae import SparseAutoEncoder, MeasurementPredictor
@@ -25,36 +23,21 @@ from ..models.sae import SparseAutoEncoder, MeasurementPredictor
 
 class SAEPipeline(BasePipeline):
 
-    def __init__(self, device='cuda', weights_base_dir='results',
-                 config_path='scripts/sae_pipeline.yaml',
-                 sae_dir_override='',
-                 predictor_dir_override=''):
+    def __init__(self, device='cuda', weights_base_dir='results'):
         super().__init__(device=device, weights_base_dir=weights_base_dir)
         self.predictor = None
         self.decoder = None
         self.sparsity_threshold = 0.0
         self.shape_dim = 63
-        self.config_path = config_path
-        self.sae_dir_override = sae_dir_override
-        self.predictor_dir_override = predictor_dir_override
-        self.predictor_dir = None
-        self.sae_dir = None
 
     def load_model(self, level: int) -> None:
         """Load predictor MLP + SAE decoder from results directory."""
         if self.predictor is not None:
             return  # Already loaded (level-independent)
 
-        pipeline_cfg = self._load_pipeline_config()
-        predictor_dir = self._resolve_result_dir(
-            self.predictor_dir_override
-            or pipeline_cfg.get('sae_predictor_dir', ''),
-            prefix='sae_predictor_baseline')
-        sae_dir = self._resolve_result_dir(
-            self.sae_dir_override or pipeline_cfg.get('sae_dir', ''),
-            prefix='sae_baseline')
-        self.predictor_dir = predictor_dir
-        self.sae_dir = sae_dir
+        # Find the latest sae_predictor result directory
+        predictor_dir = self._find_latest_dir('sae_predictor_baseline')
+        sae_dir = self._find_latest_dir('sae_baseline')
 
         if predictor_dir is None or sae_dir is None:
             raise FileNotFoundError(
@@ -66,18 +49,7 @@ class SAEPipeline(BasePipeline):
             os.path.join(predictor_dir, 'best.pt'),
             os.path.join(predictor_dir, 'last.pt'),
         ])
-        if 'numpy._core' not in sys.modules:
-            sys.modules['numpy._core'] = np.core
-        if 'numpy._core.multiarray' not in sys.modules:
-            sys.modules['numpy._core.multiarray'] = np.core.multiarray
-        try:
-            pred_ckpt = torch.load(
-                pred_path, map_location=self.device, weights_only=False)
-        except pickle.UnpicklingError:
-            pred_ckpt = torch.load(
-                pred_path, map_location=self.device, weights_only=True)
-        pred_state = (pred_ckpt.get('model_state_dict', pred_ckpt)
-                      if isinstance(pred_ckpt, dict) else pred_ckpt)
+        pred_state = self._load_state_dict(pred_path, self.device)
         predictor = MeasurementPredictor()
         predictor.load_state_dict(pred_state)
         predictor.to(self.device)
@@ -92,11 +64,6 @@ class SAEPipeline(BasePipeline):
         sae_state = self._load_state_dict(sae_path, self.device)
         sae = SparseAutoEncoder()
         sae.load_state_dict(sae_state)
-
-        if isinstance(pred_ckpt, dict) and 'sae_decoder_state_dict' in pred_ckpt:
-            sae.decoder.load_state_dict(pred_ckpt['sae_decoder_state_dict'])
-            print('SAEPipeline: using decoder weights stored in predictor checkpoint')
-
         sae.to(self.device)
         sae.eval()
         self.decoder = sae.decoder
@@ -110,17 +77,6 @@ class SAEPipeline(BasePipeline):
                 self.shape_dim = int(f.attrs.get('shape_dim', 63))
 
         print(f'SAEPipeline loaded: predictor={pred_path}, sae={sae_path}')
-
-    def _load_pipeline_config(self):
-        """Load SAE pipeline YAML config if it exists."""
-        if not self.config_path or not os.path.exists(self.config_path):
-            return {}
-        with open(self.config_path, 'r') as f:
-            data = yaml.safe_load(f) or {}
-        if not isinstance(data, dict):
-            raise ValueError(
-                f'Invalid SAE pipeline config: {self.config_path}')
-        return data
 
     def _find_latest_dir(self, prefix):
         """Find the latest auto-numbered results directory."""
@@ -136,37 +92,22 @@ class SAEPipeline(BasePipeline):
                 break
         return latest
 
-    def _resolve_result_dir(self, configured_dir, prefix):
-        """Resolve configured result dir, or fall back to latest auto-numbered."""
-        if configured_dir:
-            if os.path.isabs(configured_dir):
-                return configured_dir
-            return os.path.join(self.weights_base_dir, configured_dir)
-        return self._find_latest_dir(prefix)
-
     def reconstruct(self, Uel: np.ndarray, ref_data: dict,
                     level: int) -> np.ndarray:
         """Reconstruct segmentation from voltage measurements."""
-        return self.reconstruct_batch([Uel], ref_data, level)[0]
-
-    def _prepare_input(self, Uel: np.ndarray, ref_data: dict, level: int):
-        """Prepare one flattened masked input sample."""
         Injref = ref_data['Injref']
-        Uelref = np.asarray(ref_data['Uelref']).reshape(-1)
+        Uelref = np.array(ref_data['Uelref']).flatten()
+
+        # Difference measurements
+        y_diff = (Uel - Uelref).flatten()
+
+        # Apply vincl mask
         vincl = self.create_vincl(level, Injref).T.flatten()
+        y_diff[~vincl] = 0.0
 
-        y = np.asarray(Uel).reshape(-1) - Uelref
-        y[~vincl] = 0.0
-        return np.asarray(y, dtype=np.float32).reshape(-1)
-
-    def reconstruct_batch(self, Uel_list, ref_data, level):
-        """Batch reconstruction for efficiency."""
-        y_batch = [self._prepare_input(Uel, ref_data, level)
-                   for Uel in Uel_list]
-        y_tensor = torch.from_numpy(np.stack(y_batch).astype(np.float32)).to(
-            self.device)
-        level_tensor = torch.full(
-            (y_tensor.shape[0],), level, device=self.device)
+        # To tensor
+        y_tensor = torch.from_numpy(
+            y_diff.astype(np.float32)).unsqueeze(0).to(self.device)
 
         with torch.no_grad():
             with self._autocast_context():
@@ -178,7 +119,7 @@ class SAEPipeline(BasePipeline):
                     z_shape = z_shape * mask
 
                 # Decode
-                canonical_logits = self.decoder(z_shape)  # (B, 3, 256, 256)
+                canonical_logits = self.decoder(z_shape)  # (1, 3, 256, 256)
 
                 # Rotate by +θ
                 theta = torch.atan2(angle_xy[:, 1], angle_xy[:, 0])
@@ -195,7 +136,11 @@ class SAEPipeline(BasePipeline):
                                        padding_mode='zeros',
                                        align_corners=False)
 
-                pred = logits.argmax(dim=1)  # (B, 256, 256)
+                pred = logits.argmax(dim=1)  # (1, 256, 256)
 
-        pred_np = pred.cpu().numpy().astype(int)
-        return [arr for arr in pred_np]
+        return pred.squeeze(0).cpu().numpy().astype(int)
+
+    def reconstruct_batch(self, Uel_list, ref_data, level):
+        """Batch reconstruction for efficiency."""
+        return [self.reconstruct(Uel, ref_data, level)
+                for Uel in Uel_list]

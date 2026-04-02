@@ -255,11 +255,69 @@ class FCUNetHDF5Dataset(Dataset):
                 torch.from_numpy(gt))
 
     def __del__(self):
-        if getattr(self, '_h5_file', None) is not None:
-            try:
+        try:
+            if getattr(self, '_h5_file', None) is not None:
                 self._h5_file.close()
-            except Exception:
-                pass
+        except Exception:
+            pass
+
+
+class DCTHDF5Dataset(Dataset):
+    """HDF5-backed dataset for DCT predictor training.
+
+    Returns (measurements, gt_indices).
+    """
+
+    def __init__(self, h5_path, Uref, InvLn, indices=None, augment_noise=True):
+        import h5py
+
+        self.h5_path = h5_path
+        self.Uref = Uref
+        self.InvLn = InvLn
+        self.augment_noise = augment_noise
+
+        with h5py.File(h5_path, 'r') as f:
+            total_len = f['gt'].shape[0]
+
+        self.indices = list(indices) if indices is not None \
+            else list(range(total_len))
+        self._h5_file = None
+        print(f'DCTHDF5Dataset: {len(self)} samples from {h5_path}')
+
+    def _open_h5(self):
+        if self._h5_file is None:
+            import h5py
+            self._h5_file = h5py.File(self.h5_path, 'r')
+        return self._h5_file
+
+    def __len__(self):
+        return len(self.indices)
+
+    def __getitem__(self, idx):
+        h5 = self._open_h5()
+        real_idx = self.indices[idx]
+
+        gt_np = h5['gt'][real_idx]
+        measurements = h5['measurements'][real_idx]
+        measurements = np.asarray(measurements).reshape(-1)
+        if self.augment_noise:
+            noise = np.asarray(
+                self.InvLn * np.random.randn(self.Uref.shape[0], 1)).reshape(-1)
+            measurements = measurements - (self.Uref + noise)
+        else:
+            measurements = measurements - self.Uref
+
+        return (
+            torch.from_numpy(measurements.astype(np.float32)),
+            torch.from_numpy(gt_np.astype(np.int64)),
+        )
+
+    def __del__(self):
+        try:
+            if getattr(self, '_h5_file', None) is not None:
+                self._h5_file.close()
+        except Exception:
+            pass
 
 
 class SimHDF5Dataset(Dataset):
@@ -313,11 +371,11 @@ class SimHDF5Dataset(Dataset):
                 torch.tensor(self.level, dtype=torch.float32))
 
     def __del__(self):
-        if getattr(self, '_h5_file', None) is not None:
-            try:
+        try:
+            if getattr(self, '_h5_file', None) is not None:
                 self._h5_file.close()
-            except Exception:
-                pass
+        except Exception:
+            pass
 
 
 # ---------------------------------------------------------------------------
@@ -376,11 +434,11 @@ class GTHDF5Dataset(Dataset):
                 torch.from_numpy(gt_indices))
 
     def __del__(self):
-        if getattr(self, '_h5_file', None) is not None:
-            try:
+        try:
+            if getattr(self, '_h5_file', None) is not None:
                 self._h5_file.close()
-            except Exception:
-                pass
+        except Exception:
+            pass
 
 
 class SAEPredictorHDF5Dataset(Dataset):
@@ -401,7 +459,8 @@ class SAEPredictorHDF5Dataset(Dataset):
     """
 
     def __init__(self, h5_path, latent_h5_path, Uref, InvLn,
-                 indices=None, augment_noise=True, augment_rotation=True):
+                 indices=None, augment_noise=True, augment_rotation=True,
+                 slot_class_maps=None):
         import h5py
 
         self.h5_path = h5_path
@@ -409,6 +468,7 @@ class SAEPredictorHDF5Dataset(Dataset):
         self.InvLn = InvLn
         self.augment_noise = augment_noise
         self.augment_rotation = augment_rotation
+        self.slot_class_maps = slot_class_maps
 
         # Load latent codes entirely into memory (small: N×65 floats)
         with h5py.File(latent_h5_path, 'r') as f:
@@ -458,21 +518,18 @@ class SAEPredictorHDF5Dataset(Dataset):
         # Load target latent code
         code_pos = self._code_map[real_idx]
         target_z = self._all_codes[code_pos].copy()  # (65,)
-        gt_indices = np.asarray(h5['gt'][real_idx]).astype(np.int64)
-
-        rot_k = 0
 
         # Rotation augmentation: circular shift of electrode channels
         if self.augment_rotation:
-            rot_k = int(np.random.randint(0, 32))
-            if rot_k > 0:
+            k = np.random.randint(0, 32)
+            if k > 0:
                 # Reshape to (31 electrodes, 76 patterns), shift, flatten
                 meas_2d = measurements.reshape(31, 76)
-                meas_2d = np.roll(meas_2d, shift=rot_k, axis=0)
+                meas_2d = np.roll(meas_2d, shift=k, axis=0)
                 measurements = meas_2d.flatten()
 
                 # Update angle_xy: rotate by k × (2π/32)
-                delta = rot_k * (2 * np.pi / 32)
+                delta = k * (2 * np.pi / 32)
                 cos_old = target_z[63]
                 sin_old = target_z[64]
                 target_z[63] = (cos_old * np.cos(delta)
@@ -481,48 +538,67 @@ class SAEPredictorHDF5Dataset(Dataset):
                                 + cos_old * np.sin(delta))
 
         return (torch.from_numpy(measurements.astype(np.float32)),
-                torch.from_numpy(target_z.astype(np.float32)),
-                torch.from_numpy(gt_indices),
-                torch.tensor(rot_k, dtype=torch.int64))
+                torch.from_numpy(target_z.astype(np.float32)))
+
+
+# ---------------------------------------------------------------------------
+# VQ-SAE dataset classes
+# ---------------------------------------------------------------------------
 
 
 class VQGTHDF5Dataset(GTHDF5Dataset):
-    """Alias dataset for VQ SAE GT training."""
+    """HDF5-backed dataset for VQ SAE training.
+
+    Same return format as GTHDF5Dataset:
+      - gt_onehot: (3, 256, 256)
+      - gt_indices: (256, 256)
+    """
+
+    def __init__(self, h5_path, indices=None):
+        super().__init__(h5_path, indices=indices)
+        print(f'VQGTHDF5Dataset: {len(self)} samples from {h5_path}')
 
 
 class VQSAEPredictorHDF5Dataset(Dataset):
-    """HDF5-backed dataset for VQ SAE predictor training."""
+    """HDF5-backed dataset for VQ SAE predictor training.
+
+    Returns:
+      - measurements: (2356,)
+      - target_indices: (num_slots,)
+      - target_angle: (2,)
+    """
 
     def __init__(self, h5_path, latent_h5_path, Uref, InvLn,
-                 indices=None, augment_noise=True, augment_rotation=True):
+                 indices=None, augment_noise=True, augment_rotation=True,
+                 slot_class_maps=None):
         import h5py
 
         self.h5_path = h5_path
-        self.Uref = Uref
+        self.Uref = np.asarray(Uref).reshape(-1)
         self.InvLn = InvLn
         self.augment_noise = augment_noise
         self.augment_rotation = augment_rotation
+        self.slot_class_maps = slot_class_maps
 
         with h5py.File(latent_h5_path, 'r') as f:
-            self._all_slot_indices = f['indices'][:]
-            self._all_angles = f['angle_xy'][:]
-            self._sample_indices = f['sample_indices'][:]
+            self._all_slot_indices = f['indices'][:]        # (N, num_slots)
+            self._all_angle_xy = f['angle_xy'][:]           # (N, 2)
+            self._code_indices = f['sample_indices'][:]     # (N,)
 
-        self._latent_map = {
-            int(idx): pos for pos, idx in enumerate(self._sample_indices)
-        }
+        self._code_map = {int(idx): pos
+                          for pos, idx in enumerate(self._code_indices)}
 
         with h5py.File(h5_path, 'r') as f:
             total_len = f['gt'].shape[0]
 
         if indices is not None:
-            self.indices = [i for i in indices if i in self._latent_map]
+            self.indices = [i for i in indices if i in self._code_map]
         else:
-            self.indices = [i for i in range(total_len) if i in self._latent_map]
+            self.indices = [i for i in range(total_len) if i in self._code_map]
 
         self._h5_file = None
         print(f'VQSAEPredictorHDF5Dataset: {len(self)} samples '
-              f'(data: {h5_path}, latent: {latent_h5_path})')
+              f'(data: {h5_path}, codes: {latent_h5_path})')
 
     def _open_h5(self):
         if self._h5_file is None:
@@ -540,40 +616,48 @@ class VQSAEPredictorHDF5Dataset(Dataset):
         measurements = np.asarray(h5['measurements'][real_idx]).flatten()
         if self.augment_noise:
             noise = np.asarray(
-                self.InvLn * np.random.randn(
-                    self.Uref.shape[0], 1)).flatten()
+                self.InvLn * np.random.randn(self.Uref.shape[0], 1)).flatten()
             measurements = measurements - (self.Uref + noise)
         else:
             measurements = measurements - self.Uref
 
-        latent_pos = self._latent_map[real_idx]
-        target_indices = self._all_slot_indices[latent_pos].copy()
-        target_angle = self._all_angles[latent_pos].copy()
+        gt_indices = np.asarray(h5['gt'][real_idx]).astype(np.int64)
+        code_pos = self._code_map[real_idx]
+        target_indices = self._all_slot_indices[code_pos].copy()
+        target_angle = self._all_angle_xy[code_pos].copy()
+        rot_steps = 0
+
+        if self.slot_class_maps is not None:
+            target_indices = np.asarray([
+                self.slot_class_maps[slot_idx][int(code)]
+                for slot_idx, code in enumerate(target_indices)
+            ], dtype=np.int64)
 
         if self.augment_rotation:
-            rot_k = int(np.random.randint(0, 32))
-            if rot_k > 0:
+            k = np.random.randint(0, 32)
+            if k > 0:
+                rot_steps = int(k)
                 meas_2d = measurements.reshape(31, 76)
-                meas_2d = np.roll(meas_2d, shift=rot_k, axis=0)
+                meas_2d = np.roll(meas_2d, shift=k, axis=0)
                 measurements = meas_2d.flatten()
 
-                delta = rot_k * (2 * np.pi / 32)
+                delta = k * (2 * np.pi / 32)
                 cos_old = target_angle[0]
                 sin_old = target_angle[1]
-                target_angle[0] = (
-                    cos_old * np.cos(delta) - sin_old * np.sin(delta))
-                target_angle[1] = (
-                    sin_old * np.cos(delta) + cos_old * np.sin(delta))
+                target_angle[0] = (cos_old * np.cos(delta)
+                                   - sin_old * np.sin(delta))
+                target_angle[1] = (sin_old * np.cos(delta)
+                                   + cos_old * np.sin(delta))
 
-        return (
-            torch.from_numpy(measurements.astype(np.float32)),
-            torch.from_numpy(target_indices.astype(np.int64)),
-            torch.from_numpy(target_angle.astype(np.float32)),
-        )
+        return (torch.from_numpy(measurements.astype(np.float32)),
+                torch.from_numpy(target_indices.astype(np.int64)),
+                torch.from_numpy(target_angle.astype(np.float32)),
+                torch.from_numpy(gt_indices),
+                torch.tensor(rot_steps, dtype=torch.long))
 
     def __del__(self):
-        if getattr(self, '_h5_file', None) is not None:
-            try:
+        try:
+            if getattr(self, '_h5_file', None) is not None:
                 self._h5_file.close()
-            except Exception:
-                pass
+        except Exception:
+            pass

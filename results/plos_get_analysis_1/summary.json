@@ -1,0 +1,196 @@
+{
+  "data_root": "Subjects Data/Plos One Data",
+  "num_files": 12,
+  "files": [
+    {
+      "file": "Subject A/1.Day/subject_A_day_1.get",
+      "frames": 30000,
+      "raw_shape": [
+        256,
+        30000
+      ],
+      "reordered_shape": [
+        208,
+        30000
+      ],
+      "raw_mean_abs": 0.07987616211175919,
+      "reordered_mean_abs": 0.07875668257474899,
+      "signal_std": 1.0
+    },
+    {
+      "file": "Subject A/2.Day/subject_A_day_2.get",
+      "frames": 30000,
+      "raw_shape": [
+        256,
+        30000
+      ],
+      "reordered_shape": [
+        208,
+        30000
+      ],
+      "raw_mean_abs": 0.061710551381111145,
+      "reordered_mean_abs": 0.06044385954737663,
+      "signal_std": 0.9999999999999999
+    },
+    {
+      "file": "Subject A/3.Day/subject_A_day_3.get",
+      "frames": 30000,
+      "raw_shape": [
+        256,
+        30000
+      ],
+      "reordered_shape": [
+        208,
+        30000
+      ],
+      "raw_mean_abs": 0.06695930659770966,
+      "reordered_mean_abs": 0.06609903275966644,
+      "signal_std": 1.0
+    },
+    {
+      "file": "Subject A/4.Day/subject_A_day_4.get",
+      "frames": 30000,
+      "raw_shape": [
+        256,
+        30000
+      ],
+      "reordered_shape": [
+        208,
+        30000
+      ],
+      "raw_mean_abs": 0.06275424361228943,
+      "reordered_mean_abs": 0.061253201216459274,
+      "signal_std": 1.0
+    },
+    {
+      "file": "Subject A/5.Day/subject_A_day_5.get",
+      "frames": 30000,
+      "raw_shape": [
+        256,
+        30000
+      ],
+      "reordered_shape": [
+        208,
+        30000
+      ],
+      "raw_mean_abs": 0.06928380578756332,
+      "reordered_mean_abs": 0.0683414489030838,
+      "signal_std": 0.9999999999999999
+    },
+    {
+      "file": "Subject A/6.Day/subject_A_day_6.get",
+      "frames": 30000,
+      "raw_shape": [
+        256,
+        30000
+      ],
+      "reordered_shape": [
+        208,
+        30000
+      ],
+      "raw_mean_abs": 0.0775081142783165,
+      "reordered_mean_abs": 0.0781535655260086,
+      "signal_std": 1.0
+    },
+    {
+      "file": "Subject A/7.Day/subject_A_day_7.get",
+      "frames": 30000,
+      "raw_shape": [
+        256,
+        30000
+      ],
+      "reordered_shape": [
+        208,
+        30000
+      ],
+      "raw_mean_abs": 0.06978674978017807,
+      "reordered_mean_abs": 0.06932803243398666,
+      "signal_std": 1.0
+    },
+    {
+      "file": "Subject B/subject_B.get",
+      "frames": 30000,
+      "raw_shape": [
+        256,
+        30000
+      ],
+      "reordered_shape": [
+        208,
+        30000
+      ],
+      "raw_mean_abs": 0.0635996162891388,
+      "reordered_mean_abs": 0.06299635767936707,
+      "signal_std": 1.0
+    },
+    {
+      "file": "Subject C/subject_C.get",
+      "frames": 3000,
+      "raw_shape": [
+        256,
+        3000
+      ],
+      "reordered_shape": [
+        208,
+        3000
+      ],
+      "raw_mean_abs": 0.12805289030075073,
+      "reordered_mean_abs": 0.13592857122421265,
+      "signal_std": 1.0
+    },
+    {
+      "file": "Subject D/subject_D.get",
+      "frames": 760,
+      "raw_shape": [
+        256,
+        760
+      ],
+      "reordered_shape": [
+        208,
+        760
+      ],
+      "raw_mean_abs": 0.5909661054611206,
+      "reordered_mean_abs": 0.5922284126281738,
+      "signal_std": 1.0
+    },
+    {
+      "file": "Subject E/subject_E.get",
+      "frames": 1220,
+      "raw_shape": [
+        256,
+        1220
+      ],
+      "reordered_shape": [
+        208,
+        1220
+      ],
+      "raw_mean_abs": 0.6445335149765015,
+      "reordered_mean_abs": 0.6350842118263245,
+      "signal_std": 1.0
+    },
+    {
+      "file": "Subject F/subject_F.get",
+      "frames": 3000,
+      "raw_shape": [
+        256,
+        3000
+      ],
+      "reordered_shape": [
+        208,
+        3000
+      ],
+      "raw_mean_abs": 0.13178808987140656,
+      "reordered_mean_abs": 0.1393543928861618,
+      "signal_std": 0.9999999999999999
+    }
+  ],
+  "plots": [
+    {
+      "file": "Subject A/1.Day/subject_A_day_1.get",
+      "figure": "Subject A__1.Day__subject_A_day_1.png"
+    },
+    {
+      "file": "Subject A/2.Day/subject_A_day_2.get",
+      "figure": "Subject A__2.Day__subject_A_day_2.png"
+    }
+  ]
+}

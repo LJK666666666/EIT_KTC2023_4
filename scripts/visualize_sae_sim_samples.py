@@ -195,6 +195,7 @@ def main():
     if os.path.isdir(args.weights_dir) and os.path.exists(
             os.path.join(args.weights_dir, 'config.yaml')):
         predictor_cfg = load_result_config(args.weights_dir)
+        cfg_family = infer_family(args, weights_name, predictor_cfg)
         if weights_name.startswith('sae_predictor_') and not predictor_dir_override:
             predictor_dir_override = weights_name
             weights_base_dir = weights_parent
@@ -215,6 +216,20 @@ def main():
         elif weights_name.startswith('vq_sae_baseline') and not vq_sae_dir_override:
             vq_sae_dir_override = weights_name
             weights_base_dir = weights_parent
+        elif cfg_family == 'sae' and not predictor_dir_override:
+            predictor_dir_override = weights_name
+            weights_base_dir = weights_parent
+            sae_ckpt = predictor_cfg.get('sae', {}).get('checkpoint', '')
+            if sae_ckpt and not sae_dir_override:
+                sae_dir_override = os.path.basename(
+                    os.path.dirname(os.path.normpath(sae_ckpt)))
+        elif cfg_family == 'vq_sae' and not vq_predictor_dir_override:
+            vq_predictor_dir_override = weights_name
+            weights_base_dir = weights_parent
+            vq_ckpt = predictor_cfg.get('vq_sae', {}).get('checkpoint', '')
+            if vq_ckpt and not vq_sae_dir_override:
+                vq_sae_dir_override = os.path.basename(
+                    os.path.dirname(os.path.normpath(vq_ckpt)))
 
     family = infer_family(args, weights_name, predictor_cfg)
 
