@@ -1,0 +1,17 @@
+{
+  "method": "dct_sigma_hybrid_predictor",
+  "weights_dir": "results\\dct_sigma_varlow_hybrid_1",
+  "hdf5_path": "dataset_lung_varlow\\level_1\\data.h5",
+  "split": "test",
+  "device": "cuda",
+  "num_params": 7673194,
+  "num_trainable_params": 7673194,
+  "single_latency_ms_mean": 4.02853333313639,
+  "single_latency_ms_std": 0.8490074874727559,
+  "batch_size": 32,
+  "batch_latency_ms_mean": 13.467200000256222,
+  "batch_latency_ms_std": 1.7152545501462668,
+  "batch_per_sample_ms_mean": 0.42085000000800693,
+  "warmup": 5,
+  "repeats": 30
+}

@@ -1,0 +1,47 @@
+{
+  "mask_weights_dir": "results/dct_sigma_td16_mask_mixed_1",
+  "residual_weights_dir": "results/dct_sigma_td16_spatial_mixed_1",
+  "split": "test",
+  "hdf5_path": "dataset_lung_td16_pilot\\level_1\\data.h5",
+  "residual_model_type": "spatial",
+  "mask_threshold": 0.02,
+  "prob_threshold": 0.5,
+  "external_mask_metrics": {
+    "precision": 0.06622820484385142,
+    "recall": 0.29139781976172313,
+    "f1": 0.08918747112205296,
+    "iou": 0.054493039792126705,
+    "accuracy": 0.7773371104815865
+  },
+  "internal_prediction_metrics": {
+    "mae_mean": 0.031470861314456325,
+    "rmse_mean": 0.09226901084101842,
+    "rel_l2_mean": 206925415.09858674,
+    "active_rel_l2_mean": 0.9620560775844111
+  },
+  "residual_only_metrics": {
+    "mae_mean": 0.04649937451084634,
+    "rmse_mean": 0.10295010587083944,
+    "rel_l2_mean": 396974499.1280661,
+    "active_rel_l2_mean": 0.9281007884995459
+  },
+  "external_soft_fusion_metrics": {
+    "mae_mean": 0.03184085966066825,
+    "rmse_mean": 0.09264017924442955,
+    "rel_l2_mean": 211413013.0467549,
+    "active_rel_l2_mean": 0.9616036391996461
+  },
+  "external_hard_fusion_metrics": {
+    "mae_mean": 0.028755554961286605,
+    "rmse_mean": 0.09980898675411033,
+    "rel_l2_mean": 331550784.6707204,
+    "active_rel_l2_mean": 0.9516259855924734
+  },
+  "internal_mask_metrics": {
+    "precision": 0.03070284719472605,
+    "recall": 0.30936874779282686,
+    "f1": 0.05217685811787098,
+    "iou": 0.02845412344921196,
+    "accuracy": 0.6273689079031046
+  }
+}

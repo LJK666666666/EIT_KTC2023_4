@@ -1,0 +1,11 @@
+{
+  "weights_dir": "results\\dct_sigma_varlow_residual_1",
+  "hdf5_path": "dataset_lung_varlow\\level_1\\data.h5",
+  "split": "test",
+  "method": "dct_sigma_residual_predictor",
+  "num_samples": 52,
+  "mae_mean": 0.09773846912275672,
+  "rmse_mean": 0.1555741033935873,
+  "rel_l2_mean": 0.2008364180320069,
+  "reconstruction_time_sec": 0.21238207817077637
+}

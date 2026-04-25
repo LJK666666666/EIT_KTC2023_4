@@ -1,0 +1,12 @@
+{
+  "weights_dir": "results\\dct_sigma_td16_pilot_1",
+  "hdf5_path": "dataset_lung_td16_pilot\\level_1\\data.h5",
+  "split": "test",
+  "method": "dct_sigma_td16_predictor",
+  "num_samples": 7,
+  "mae_mean": 0.038394633996718844,
+  "rmse_mean": 0.09582299673143749,
+  "rel_l2_mean": 239886954.4171968,
+  "active_rel_l2_mean": 239886954.3999589,
+  "reconstruction_time_sec": 0.023576974868774414
+}

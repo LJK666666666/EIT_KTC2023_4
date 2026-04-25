@@ -320,6 +320,139 @@ class DCTHDF5Dataset(Dataset):
             pass
 
 
+class ConductivityHDF5Dataset(Dataset):
+    """HDF5-backed dataset for continuous conductivity regression.
+
+    Returns:
+      - measurements: (2356,) float tensor
+      - sigma: (1, 256, 256) float tensor
+      - gt_indices: (256, 256) int tensor, kept for optional visualization
+    """
+
+    def __init__(self, h5_path, Uref, InvLn, indices=None, augment_noise=True):
+        import h5py
+
+        self.h5_path = h5_path
+        self.Uref = Uref
+        self.InvLn = InvLn
+        self.augment_noise = augment_noise
+
+        with h5py.File(h5_path, 'r') as f:
+            if 'sigma' not in f:
+                raise ValueError(
+                    f'HDF5 file {h5_path} does not contain sigma dataset')
+            total_len = f['sigma'].shape[0]
+
+        self.indices = list(indices) if indices is not None \
+            else list(range(total_len))
+        self._h5_file = None
+        print(f'ConductivityHDF5Dataset: {len(self)} samples from {h5_path}')
+
+    def _open_h5(self):
+        if self._h5_file is None:
+            import h5py
+            self._h5_file = h5py.File(self.h5_path, 'r')
+        return self._h5_file
+
+    def __len__(self):
+        return len(self.indices)
+
+    def __getitem__(self, idx):
+        h5 = self._open_h5()
+        real_idx = self.indices[idx]
+
+        gt_np = h5['gt'][real_idx]
+        sigma = h5['sigma'][real_idx]
+        measurements = h5['measurements'][real_idx]
+        measurements = np.asarray(measurements).reshape(-1)
+        if self.augment_noise:
+            noise = np.asarray(
+                self.InvLn * np.random.randn(self.Uref.shape[0], 1)).reshape(-1)
+            measurements = measurements - (self.Uref + noise)
+        else:
+            measurements = measurements - self.Uref
+
+        sigma = np.asarray(sigma, dtype=np.float32)[None, ...]
+        return (
+            torch.from_numpy(measurements.astype(np.float32)),
+            torch.from_numpy(sigma),
+            torch.from_numpy(gt_np.astype(np.int64)),
+        )
+
+    def __del__(self):
+        try:
+            if getattr(self, '_h5_file', None) is not None:
+                self._h5_file.close()
+        except Exception:
+            pass
+
+
+class DifferenceConductivityHDF5Dataset(Dataset):
+    """HDF5-backed dataset for time-difference pulmonary conductivity regression.
+
+    Expected HDF5 datasets:
+      - measurements: (N, 208) float32   delta measurements
+      - sigma_delta: (N, 256, 256) float32
+      - domain_mask: (N, 256, 256) uint8/bool
+      - sigma_ref: optional absolute reference conductivity
+      - sigma_target: optional absolute target conductivity
+    """
+
+    def __init__(self, h5_path, indices=None):
+        import h5py
+
+        self.h5_path = h5_path
+        with h5py.File(h5_path, 'r') as f:
+            if 'sigma_delta' not in f or 'domain_mask' not in f:
+                raise ValueError(
+                    f'HDF5 file {h5_path} must contain sigma_delta and domain_mask.'
+                )
+            total_len = f['sigma_delta'].shape[0]
+
+        self.indices = list(indices) if indices is not None else list(range(total_len))
+        self._h5_file = None
+
+    def _open_h5(self):
+        if self._h5_file is None:
+            import h5py
+            self._h5_file = h5py.File(self.h5_path, 'r')
+        return self._h5_file
+
+    def __len__(self):
+        return len(self.indices)
+
+    def __getitem__(self, idx):
+        h5 = self._open_h5()
+        real_idx = self.indices[idx]
+        measurements = np.asarray(h5['measurements'][real_idx], dtype=np.float32).reshape(-1)
+        sigma_delta = np.asarray(h5['sigma_delta'][real_idx], dtype=np.float32)[None, ...]
+        domain_mask = np.asarray(h5['domain_mask'][real_idx], dtype=np.float32)[None, ...]
+        sigma_ref = None
+        sigma_target = None
+        if 'sigma_ref' in h5:
+            sigma_ref = np.asarray(h5['sigma_ref'][real_idx], dtype=np.float32)[None, ...]
+        if 'sigma_target' in h5:
+            sigma_target = np.asarray(h5['sigma_target'][real_idx], dtype=np.float32)[None, ...]
+
+        out = [
+            torch.from_numpy(measurements),
+            torch.from_numpy(sigma_delta),
+            torch.from_numpy(domain_mask),
+        ]
+        if sigma_ref is not None:
+            out.append(torch.from_numpy(sigma_ref))
+        if sigma_target is not None:
+            out.append(torch.from_numpy(sigma_target))
+        return tuple(out)
+
+    def __del__(self):
+        try:
+            if getattr(self, '_h5_file', None) is not None:
+                self._h5_file.close()
+        except Exception:
+            pass
+
+
 class SimHDF5Dataset(Dataset):
     """HDF5-backed dataset for PostP/CondD.
 

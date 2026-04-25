@@ -1,0 +1,42 @@
+{
+  "datasets": {
+    "low": {
+      "atlas_rel_l2": 0.19902387026100177,
+      "oracle_atlas_residual_dct_k20_rel_l2": 0.14250838350257716,
+      "direct_rel_l2": 0.6943514821397943,
+      "residual_rel_l2": 0.2008364180320069,
+      "hybrid_rel_l2": 0.20124252805837736,
+      "atlas_decoder_rel_l2": 0.20061580647265947,
+      "fc_sigmaunet_rel_l2": 0.2048834038031986,
+      "direct_mae": 0.5028918219389096,
+      "residual_mae": 0.09773846912275672,
+      "hybrid_mae": 0.09806232729547466,
+      "atlas_decoder_mae": 0.09777501176937459,
+      "fc_sigmaunet_mae": 0.10131447636619526,
+      "direct_rmse": 0.5401168056568257,
+      "residual_rmse": 0.1555741033935873,
+      "hybrid_rmse": 0.1558060607655386,
+      "atlas_decoder_rmse": 0.15542663223295605,
+      "fc_sigmaunet_rmse": 0.15911056778777083
+    },
+    "high": {
+      "atlas_rel_l2": 0.29950704087330293,
+      "oracle_atlas_residual_dct_k20_rel_l2": 0.15839697399833774,
+      "direct_rel_l2": 0.722976374454309,
+      "residual_rel_l2": 0.2971319139954525,
+      "hybrid_rel_l2": 0.2972745389975052,
+      "atlas_decoder_rel_l2": 0.29717858302829664,
+      "fc_sigmaunet_rel_l2": 0.3009544915188514,
+      "direct_mae": 0.5238987991716387,
+      "residual_mae": 0.1613817913889448,
+      "hybrid_mae": 0.16137590863234752,
+      "atlas_decoder_mae": 0.16160692824785355,
+      "fc_sigmaunet_mae": 0.16429641331091224,
+      "direct_rmse": 0.579207700097418,
+      "residual_rmse": 0.23639559519700695,
+      "hybrid_rmse": 0.2363832466927069,
+      "atlas_decoder_rmse": 0.2363980064770274,
+      "fc_sigmaunet_rmse": 0.2399706223899395
+    }
+  }
+}

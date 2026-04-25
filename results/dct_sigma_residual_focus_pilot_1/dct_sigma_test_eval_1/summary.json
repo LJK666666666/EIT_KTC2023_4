@@ -1,0 +1,11 @@
+{
+  "weights_dir": "results\\dct_sigma_residual_focus_pilot_1",
+  "hdf5_path": "dataset_lung_pilot\\level_1\\data.h5",
+  "split": "test",
+  "method": "dct_sigma_residual_predictor",
+  "num_samples": 52,
+  "mae_mean": 0.128971741888123,
+  "rmse_mean": 0.20195010673543273,
+  "rel_l2_mean": 0.2520900873680604,
+  "reconstruction_time_sec": 0.2991931438446045
+}

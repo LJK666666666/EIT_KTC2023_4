@@ -1,0 +1,7 @@
+{
+  "weights_dir": "results\\td16_vae_predictor_active_pilot_1",
+  "hdf5_path": "dataset_lung_td16_active\\level_1\\data.h5",
+  "split": "test",
+  "method": "td16_vae_predictor",
+  "num_samples": 4
+}

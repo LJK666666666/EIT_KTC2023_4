@@ -757,78 +757,78 @@ python scripts/train.py --method sae_predictor --hdf5-path dataset_sim/level_1/d
 
   - 总 epoch：300
   - image_loss_switch_ratio = 0.4
-  - image_loss_weight_start = 0.1                                                                                                                                          
-  - image_loss_weight_end = 1.0                                                                                                                                            
-                                                                                                                                                                           
-  对应实际训练阶段是：                                                                                                                                                     
-                                                                                                                                                                           
-  1. 第一阶段                                                                                                                                                              
-                                                                                                                                                                           
-  - epoch 0 ~ 119                                                                                                                                                          
-  - w_img = 0                                                                                                                                                              
-  - 也就是只训练 latent loss                                                                                                                                               
-  - 不看图像重建误差回传                                                                                                                                                   
-                                                                                                                                                                           
-  2. 第二阶段                                                                                                                                                              
-                                                                                                                                                                           
-  - epoch 120 ~ 299                                                                                                                                                        
-  - w_img 从 0.1 线性增大到 1.0                                                                                                                                            
-  - 也就是 latent loss 继续保留，但图像损失逐步占主导                                                                                                                      
-                                                                                                                                                                           
-  所以你觉得“第一阶段收敛非常快”是合理的，因为这 120 个 epoch 只是在拟合 latent。                                                                                          
-                                                                                                                                                                           
-  如果你想缩短第一阶段，有两种直接办法。                                                                                                                                   
-                                                                                                                                                                           
-  办法 1：缩短第一阶段                                                                                                                                                     
-  把 image_loss_switch_ratio 调小，比如：                                                                                                                                  
-                                                                                                                                                                           
-  - 0.2                                                                                                                                                                    
-      - 前 60 个 epoch 只训 latent                                                                                                                                         
-  - 0.1                                                                                                                                                                    
-      - 前 30 个 epoch 只训 latent                                                                                                                                         
-                                                                                                                                                                           
-  例如：                                                                                                                                                                   
-                                                                                                                                                                           
-  python scripts/train.py --method sae_predictor ... --image-loss-switch-ratio 0.1                                                                                         
-                                                                                                                                                                           
-  办法 2：直接不做第一阶段                                                                                                                                                 
-  把 image_loss_switch_ratio 设成 0，让训练一开始就进入“第二阶段”：                                                                                                        
-                                                                                                                                                                           
-  python scripts/train.py --method sae_predictor ... --image-loss-switch-ratio 0                                                                                           
-                                                                                                                                                                           
-  但要注意：                                                                                                                                                               
-                                                                                                                                                                           
-  - 即使这样，当前实现里 latent loss 仍然会一直保留                                                                                                                        
-  - 只是图像损失从一开始就参与训练                                                                                                                                         
-                                                                                                                                                                           
-  如果你想要“真正一开始就以图像为主”，我建议同时把：                                                                                                                       
-                                                                                                                                                                           
-  - --image-loss-weight-start 1.0                                                                                                                                          
-  - --image-loss-weight-end 1.0                                                                                                                                            
-                                                                                                                                                                           
-  这样就变成从第一个 epoch 开始：                                                                                                                                          
-                                                                                                                                                                           
-  - total_loss = latent_loss + 1.0 * image_loss                                                                                                                            
-                                                                                                                                                                           
-  例如：                                                                                                                                                                   
-                                                                                                                                                                           
+  - image_loss_weight_start = 0.1                                   
+  - image_loss_weight_end = 1.0                                     
+                   
+  对应实际训练阶段是：
+                   
+  1. 第一阶段      
+                   
+  - epoch 0 ~ 119  
+  - w_img = 0      
+  - 也就是只训练 latent loss                                        
+  - 不看图像重建误差回传                                            
+                   
+  2. 第二阶段      
+                   
+  - epoch 120 ~ 299
+  - w_img 从 0.1 线性增大到 1.0                                     
+  - 也就是 latent loss 继续保留，但图像损失逐步占主导               
+                   
+  所以你觉得“第一阶段收敛非常快”是合理的，因为这 120 个 epoch 只是在拟合 latent。                                         
+                   
+  如果你想缩短第一阶段，有两种直接办法。                            
+                   
+  办法 1：缩短第一阶段
+  把 image_loss_switch_ratio 调小，比如：                           
+                   
+  - 0.2            
+      - 前 60 个 epoch 只训 latent                                  
+  - 0.1            
+      - 前 30 个 epoch 只训 latent                                  
+                   
+  例如：           
+                   
+  python scripts/train.py --method sae_predictor ... --image-loss-switch-ratio 0.1                                        
+                   
+  办法 2：直接不做第一阶段                                          
+  把 image_loss_switch_ratio 设成 0，让训练一开始就进入“第二阶段”： 
+                   
+  python scripts/train.py --method sae_predictor ... --image-loss-switch-ratio 0                                          
+                   
+  但要注意：       
+                   
+  - 即使这样，当前实现里 latent loss 仍然会一直保留                 
+  - 只是图像损失从一开始就参与训练                                  
+                   
+  如果你想要“真正一开始就以图像为主”，我建议同时把：                
+                   
+  - --image-loss-weight-start 1.0                                   
+  - --image-loss-weight-end 1.0                                     
+                   
+  这样就变成从第一个 epoch 开始：                                   
+                   
+  - total_loss = latent_loss + 1.0 * image_loss                     
+                   
+  例如：           
+                   
   python scripts/train.py --method sae_predictor ... --image-loss-switch-ratio 0 --image-loss-weight-start 1.0 --image-loss-weight-end 1.0                                 
-                                                                                                                                                                           
-  我更推荐你先试一个折中版本，而不是完全跳过：                                                                                                                             
-                                                                                                                                                                           
-  --image-loss-switch-ratio 0.1 --image-loss-weight-start 0.3 --image-loss-weight-end 1.0                                                                                  
-                                                                                                                                                                           
-  原因是：                                                                                                                                                                 
-                                                                                                                                                                           
-  - 你现在的问题是 latent 已经学得不错，但图像域不对                                                                                                                       
-  - 所以确实没必要花 40% epoch 只训 latent                                                                                                                                 
-  - 但完全从第 1 个 epoch 就强推 image loss，也可能让 early optimization 更抖                                                                                              
-                                                                                                                                                                           
-  如果你愿意，我可以下一步直接帮你把默认配置改成更合理的一版，比如：                                                                                                       
-                                                                                                                                                                           
-  - switch_ratio = 0.1                                                                                                                                                     
-  - start = 0.3                                                                                                                                                            
-  - end = 1.0                                                                                                                                                              
+                   
+  我更推荐你先试一个折中版本，而不是完全跳过：                      
+                   
+  --image-loss-switch-ratio 0.1 --image-loss-weight-start 0.3 --image-loss-weight-end 1.0                                 
+                   
+  原因是：         
+                   
+  - 你现在的问题是 latent 已经学得不错，但图像域不对                
+  - 所以确实没必要花 40% epoch 只训 latent                          
+  - 但完全从第 1 个 epoch 就强推 image loss，也可能让 early optimization 更抖                                             
+                   
+  如果你愿意，我可以下一步直接帮你把默认配置改成更合理的一版，比如：
+                   
+  - switch_ratio = 0.1
+  - start = 0.3    
+  - end = 1.0      
 
   另外我修了一个对联合训练很关键的问题：
 
@@ -856,29 +856,29 @@ best.pt --latent-h5-path results/sae_baseline_3/latent_codes.h5 --experiment-nam
 
 
 • 已实现一套独立的 vq_sae / vq_sae_predictor 链路，不会覆盖现有 sae。
-                                                                                                                                           
-  现在支持的主链是：                                                                                                                       
-                                                                                                                                           
-  - python scripts/train.py --method vq_sae --hdf5-path ...                                                                                
-  - 训练 ST-1D-VQ-VAE                                                                                                                      
-  - 自动导出离散 latent 到 results/vq_sae_baseline_{num}/latent_codes.h5                                                                   
+                                    
+  现在支持的主链是：                
+                                    
+  - python scripts/train.py --method vq_sae --hdf5-path ...                               
+  - 训练 ST-1D-VQ-VAE               
+  - 自动导出离散 latent 到 results/vq_sae_baseline_{num}/latent_codes.h5                  
   - python scripts/train.py --method vq_sae_predictor --hdf5-path ... --vq-sae-checkpoint ... --vq-latent-h5-path ...                      
-  - 训练测量到离散槽位分类 + 角度回归的 predictor                                                                                          
-  - python scripts/evaluate_all.py --methods vq_sae --weights-dir results                                                                  
-  - 用 vq_sae_predictor + frozen vq_sae decoder 跑官方评估                                                                                 
-                                                                                                                                           
-  我还补了两点兼容性：                                                                                                                     
-                                                                                                                                           
+  - 训练测量到离散槽位分类 + 角度回归的 predictor                                         
+  - python scripts/evaluate_all.py --methods vq_sae --weights-dir results                 
+  - 用 vq_sae_predictor + frozen vq_sae decoder 跑官方评估                                
+                                    
+  我还补了两点兼容性：              
+                                    
   - vq_sae_pipeline 在 YAML 没指定 vq_sae_dir 时，会优先从 predictor 的 config.yaml 反推出配套的 vq_sae 目录，避免拿错最新实验。           
-  - HDF5 dataset 的 __del__ 做了安全关闭，避免 Windows/Python 退出时偶发 h5py 噪声报错。                                                   
-                                                                                                                                           
-  我做过的检查：                                                                                                                           
-                                                                                                                                           
-  - 新增文件全部通过 py_compile                                                                                                            
-  - ST1DVQVAE 和 VQMeasurementPredictor 前向 shape 已验证                                                                                  
-  - VQSAETrainer 的 build_model/build_datasets 已用真实 dataset_sim/level_1/data.h5 做过冒烟                                               
-                                                                                                                                           
-  有一个我主动保留的实现偏差需要告诉你：                                                                                                   
+  - HDF5 dataset 的 __del__ 做了安全关闭，避免 Windows/Python 退出时偶发 h5py 噪声报错。  
+                                    
+  我做过的检查：                    
+                                    
+  - 新增文件全部通过 py_compile     
+  - ST1DVQVAE 和 VQMeasurementPredictor 前向 shape 已验证                                 
+  - VQSAETrainer 的 build_model/build_datasets 已用真实 dataset_sim/level_1/data.h5 做过冒烟 
+                                    
+  有一个我主动保留的实现偏差需要告诉你： 
 
   - 你文档里写的是 STN 输入旋转训练也用 nearest
   - 我这里训练时仍然用 bilinear，推理时才用 nearest
@@ -896,3 +896,609 @@ python scripts/train.py --method vq_sae_predictor --hdf5-path dataset_sim/level_
   - vq_sae 的仿真样本可视化脚本
   - vq_sae 的 GT 自编码重建脚本
   - 或直接帮你排第一轮训练时的稳定性问题。
+
+
+
+  已完成                                 
+                                         
+  - 新增连续电导率数据集读取：/D:/010_CodePrograms/E/EIT_KTC2023_4/src/data/sim_dataset.py     
+      - ConductivityHDF5Dataset          
+      - 直接读取肺部 HDF5 里的 sigma     
+  - 新增连续回归指标：/D:/010_CodePrograms/E/EIT_KTC2023_4/src/evaluation/regression_metrics.py
+      - MAE                              
+      - RMSE                             
+      - relative L2                      
+      - 都是 masked 版本，只在胸腔有效区域上计算 
+  - 新增连续电导率 DCT 方法：            
+      - 配置：/D:/010_CodePrograms/E/EIT_KTC2023_4/src/configs/dct_sigma_predictor_config.py   
+      - 训练：/D:/010_CodePrograms/E/EIT_KTC2023_4/src/trainers/dct_sigma_predictor_trainer.py 
+      - 推理：/D:/010_CodePrograms/E/EIT_KTC2023_4/src/pipelines/dct_sigma_predictor_pipeline.py  
+  - 新增仿真集连续回归评估脚本：/D:/010_CodePrograms/E/EIT_KTC2023_4/scripts/evaluate_sigma_sim.py
+  - 新增连续电导率可视化脚本：/D:/010_CodePrograms/E/EIT_KTC2023_4/scripts/visualize_sigma_samples.py                                           
+  - 已注册到统一训练入口：/D:/010_CodePrograms/E/EIT_KTC2023_4/scripts/train.py                
+      - 新方法名：dct_sigma_predictor    
+                                         
+  当前口径                               
+                                         
+  - 肺部主线以后建议用连续 sigma 做主结果。   
+  - KTC2023 三值标签继续保留，作为“标签化结构恢复”补充实验。                                   
+  - 连续电导率不再用那个 SSIM-style score，而是用：                                            
+      - masked MAE                       
+      - masked RMSE                      
+      - masked relative L2               
+                                         
+  已验证                                 
+  我已经跑通了 smoke test：              
+                                         
+  - 训练结果：/D:/010_CodePrograms/E/EIT_KTC2023_4/results/dct_sigma_smoke_2                   
+  - quick eval 结果：/D:/010_CodePrograms/E/EIT_KTC2023_4/results/dct_sigma_smoke_2/dct_sigma_test_eval_2/summary.json                          
+  - quick 可视化：/D:/010_CodePrograms/E/EIT_KTC2023_4/results/dct_sigma_smoke_2/dct_sigma_test_samples_1/test_comparison.png                   
+                                         
+  这说明：                               
+                                         
+  - 数据读取通了                         
+  - 训练通了                             
+  - 推理通了                             
+  - 回归评估通了                         
+                                         
+  下一步最该跑                           
+  建议直接在你本地能正常开 num-workers 8 的终端里跑肺部正式实验：                              
+                                         
+python scripts/train.py --method dct_sigma_predictor --hdf5-path dataset_lung_2k/level_1/data.h5 --device cuda --num-workers 8 --epochs 20 --coeff-size 20 --experiment-name dct_sigma_lung2k                                           
+                                         
+  跑完后再评估：                         
+                                         
+python scripts/evaluate_sigma_sim.py --weights-dir results/dct_sigma_lung2k_1 --hdf5-path dataset_lung_2k/level_1/data.h5 --split test --device cuda --batch-size 64          
+                                         
+  再出图：                               
+                                         
+python scripts/visualize_sigma_samples.py --weights-dir results/dct_sigma_lung2k_1 --hdf5-path dataset_lung_2k/level_1/data.h5 --split test --device cuda --rows 2 --cols 4        
+                                         
+  接下来我会继续按这个连续电导率主线推进论文，把肺部部分改成以 sigma 回归为主，KTC 三值标签作为补充对照。                                       
+ 
+
+• 我觉得有机会够 ICIC，但前提是你要把故事线收紧，不要写成“三篇小报告拼在一起”。                                                                                          
+                                                                                                                                                                         
+  更准确地说：                                                                                                                                                           
+                                                                                                                                                                         
+  - 如果主题改成“数据中心的 EIT 研究”，有希望。                                                                                                                          
+  - 如果主题还是“我们提出了一个最强重建网络”，目前不够。                                                                                                                 
+                                                                                                                                                                         
+  我建议的主线是：                                                                                                                                                       
+                                                                                                                                                                         
+  高效仿真数据生成 + 数据数量/质量对 EIT 重建性能的影响分析                                                                                                              
+                                                                                                                                                                         
+  然后用两个任务做验证：                                                                                                                                                 
+                                                                                                                                                                         
+  - 肺部连续电导率回归                                                                                                                                                   
+  - 水箱实验/KTC2023 三值标签分割                                                                                                                                        
+                                                                                                                                                                         
+  这样是自洽的。因为这两个任务分别覆盖：                                                                                                                                 
+                                                                                                                                                                         
+  - 连续物理量重建                                                                                                                                                       
+  - 离散结构分割                                                                                                                                                         
+                                                                                                                                                                         
+  而“自编码器评估数据质量”可以作为数据质量分析工具，不是论文主方法。                                                                                                     
+                                                                                                                                                                         
+  ## 为什么这条线可能够 ICIC                                                                                                                                             
+                                                                                                                                                                         
+  ICIC 对这类应用论文，通常不一定要求特别强的全新理论，更看重：                                                                                                          
+                                                                                                                                                                         
+  - 问题是否清楚                                                                                                                                                         
+  - 工程价值是否明显                                                                                                                                                     
+  - 实验是否完整                                                                                                                                                         
+  - 结论是否可靠                                                                                                                                                         
+                                                                                                                                                                         
+  你现在已经有比较好的基础：                                                                                                                                             
+                                                                                                                                                                         
+  - 仿真数据生成加速是实打实的工程贡献                                                                                                                                   
+  - 肺部和水箱两个任务覆盖面合理                                                                                                                                         
+  - 可以做数据规模曲线                                                                                                                                                   
+  - 可以做数据质量曲线
+  - 可以分析速度、精度、参数量、延时                                                                                                                                     
+                                                                                                                                                                         
+  这比硬推一个目前效果还不稳定的新网络更稳。                                                                                                                             
+                                                                                                                                                                         
+  ## 但要注意一个风险                                                                                                                                                    
+                                                                                                                                                                         
+  如果你把论文写成：                                                                                                                                                     
+                                                                                                                                                                         
+  - 一部分讲加速                                                                                                                                                         
+  - 一部分讲 SAE                                                                                                                                                         
+  - 一部分讲肺部                                                                                                                                                         
+  - 一部分讲 KTC2023                                                                                                                                                     
+  - 一部分又讲 DCT/FCUNet                                                                                                                                                
+                                                                                                                                                                         
+  就会显得主题太散。                                                                                                                                                     
+                                                                                                                                                                         
+  所以需要明确主次：                                                                                                                                                     
+                                                                                                                                                                         
+  ### 推荐主贡献                                                                                                                                                         
+                                                                                                                                                                         
+  1. 高效 EIT 仿真数据生成框架                                                                                                                                           
+  2. 用数据规模与数据质量分析，研究仿真数据对下游 EIT 重建的影响                                                                                                         
+  3. 在连续肺部重建和三值标签分割两个任务上验证结论                                                                                                                      
+                                                                                                                                                                         
+  ### 推荐次贡献                                                                                                                                                         
+                                                                                                                                                                         
+  - 自编码器只是数据质量评估器                                                                                                                                           
+  - DCT/FCUNet 只是下游验证模型                                                                                                                                          
+  - 不把它们写成论文主角                                                                                                                                                 
+                                                                                                                                                                         
+  ## 这样写时，论文要达到“够投”的最低条件                                                                                                                                
+                                                                                                                                                                         
+  至少需要这几块实验完整：                                                                                                                                               
+                                                                                                                                                                         
+  1. 数据生成加速                                                                                                                                                        
+                                                                                                                                                                         
+  - 原始生成流程 vs 加速后流程                                                                                                                                           
+  - 总耗时、各阶段耗时、吞吐量                                                                                                                                           
+  - 最好有不同样本规模下的曲线                                                                                                                                           
+                                                                                                                                                                         
+  2. 数据数量影响                                                                                                                                                        
+                                                                                                                                                                         
+  - 小规模、中规模、大规模                                                                                                                                               
+  - 下游任务性能随样本数变化曲线                                                                                                                                         
+  - 肺部和 KTC 两个任务都至少各一条                                                                                                                                      
+                                                                                                                                                                         
+  3. 数据质量影响                                                                                                                                                        
+                                                                                                                                                                         
+  - 你定义几种“质量等级”或“生成策略”                                                                                                                                     
+      - 简单 phantom                                                                                                                                                     
+      - 更复杂 phantom                                                                                                                                                   
+      - 加背景扰动/噪声/形变                                                                                                                                             
+  - 看下游性能怎么变                                                                                                                                                     
+                                                                                                                                                                         
+  4. 自编码器质量分析                                                                                                                                                    
+                                                                                                                                                                         
+  - 不把它当最终方法                                                                                                                                                     
+  - 而是作为数据分布复杂度/可压缩性分析工具                                                                                                                              
+  - 例如：                                                                                                                                                               
+      - reconstruction error                                                                                                                                             
+      - latent compactness                                                                                                                                               
+      - 不同数据集复杂度比较                                                                                                                                             
+                                                                                                                                                                         
+  5. 下游任务验证                                                                                                                                                        
+                                                                                                                                                                         
+  - 肺部连续电导率：                                                                                                                                                     
+      - MAE / RMSE / relative L2                                                                                                                                         
+  - KTC2023 三值标签：                                                                                                                                                   
+      - 官方 score                                                                                                                                                       
+  - 至少 2 个基线方法                                                                                                                                                    
+      - 一个强基线                                                                                                                                                       
+      - 一个轻量基线                                                                                                                                                     
+                                                                                                                                                                         
+  ## 我的判断                                                                                                                                                            
+                                                                                                                                                                         
+  如果你把论文定位成“EIT 仿真数据生成与数据质量研究”，是够机会投 ICIC 的。                                                                                               
+                                                                                                                                                                         
+  如果你还想同时证明一个新的自编码器/新网络是最优方法，目前不够稳。                                                                                                      
+                                                                                                                                                                         
+  ## 我建议你现在就这么定                                                                                                                                                
+                                                                                                                                                                         
+  论文主线改成：                                                                                                                                                         
+                                                                                                                                                                         
+  - 数据生成加速                                                                                                                                                         
+  - 数据数量/质量分析                                                                                                                                                    
+  - 两个下游任务验证                                                                                                                                                     
+                                                                                                                                                                         
+  而不是：                                                                                                                                                               
+                                                                                                                                                                         
+  - 新模型方法论文                                                                                                                                                       
+                                                                                                                                                                         
+  一句话结论：                                                                                                                                                           
+                                                                                                                                                                         
+  - 够，但要换成“数据中心、实验中心”的论文结构                                                                                                                           
+  - 不够的地方不是工作量，而是当前主题还不够聚焦                                                                                                                         
+  - 把自编码器降级为分析工具，把下游网络降级为验证器，这篇就更像一篇完整的 ICIC 论文                                                                                     
+                                                                                                                                                                         
+  如果你同意，我下一步建议直接把论文结构和实验计划按这条主线重构。                                                                                                       
+
+
+• 当前研究主线
+  我已经把论文主线重构成了“数据中心的肺部电阻抗成像研究”：                                                                                         
+                                                                                                                                                   
+  - 主任务：肺部连续电导率回归                                                                                                                     
+  - 补充任务：KTC2023 水箱实验三值标签分割                                                                                                         
+  - 主方法定位：DCT 低频预测方法                                                                                                                   
+  - 强基线定位：FCUNet / FC-SigmaUNet                                                                                                              
+  - 自编码器定位：分析工具，不再是论文主方法                                                                                                       
+                                                                                                                                                   
+  已经完成的核心成果                                                                                                                               
+                                                                                                                                                   
+  1. 工程与实验基础                                                                                                                                
+                                                                                                                                                   
+  - 完成了仿真与评估加速，尤其是评分加速。                                                                                                         
+  - 官方评分单样本约 92s，Torch/CUDA 快速评分约 2~3ms。                                                                                            
+  - 主要说明文档：/D:/010_CodePrograms/E/EIT_KTC2023_4/GUIDE/scoring_acceleration.md                                                               
+                                                                                                                                                   
+  2. KTC2023 三值标签任务                                                                                                                          
+                                                                                                                                                   
+  - 当前仓库里最好的 benchmark 结果是 DCT ensemble：                                                                                               
+      - /D:/010_CodePrograms/E/EIT_KTC2023_4/results/eval_dct_predictor_ensemble_2/scores.json                                                     
+      - total_score = 14.0553                                                                                                                      
+  - 强基线 FCUNet：                                                                                                                                
+      - total_score = 14.0485                                                                                                                      
+  - 结论：DCT 在 KTC benchmark 上已经略超 FCUNet。                                                                                                 
+                                                                                                                                                   
+  3. 自编码器研究的结论                                                                                                                            
+                                                                                                                                                   
+  - SAE / VQ-SAE 本身的 图像自编码重建并不差。                                                                                                     
+  - 真正困难的是：从电极测量值预测 latent。                                                                                                        
+  - 所以自编码器结论现在被收敛为：                                                                                                                 
+      - 证明图像流形是可压缩的                                                                                                                     
+      - 证明瓶颈在 measurement -> latent                                                                                                           
+      - 不再作为最终方法主线                                                                                                                       
+                                                                                                                                                   
+  4. 肺部仿真数据                                                                                                                                  
+                                                                                                                                                   
+  - 已生成并使用肺部连续电导率仿真集：                                                                                                             
+      - /D:/010_CodePrograms/E/EIT_KTC2023_4/dataset_lung_2k/level_1/data.h5                                                                       
+  - 还额外构造了复杂度可控数据：
+      - 低复杂度 /D:/010_CodePrograms/E/EIT_KTC2023_4/dataset_lung_varlow/level_1/data.h5                                                          
+      - 高复杂度 /D:/010_CodePrograms/E/EIT_KTC2023_4/dataset_lung_varhigh/level_1/data.h5                                                         
+                                                                                                                                                   
+  5. 肺部主任务：连续电导率回归                                                                                                                    
+                                                                                                                                                   
+  - 直接连续 DCT 在肺部上会塌成平均模板：                                                                                                          
+      - /D:/010_CodePrograms/E/EIT_KTC2023_4/results/dct_sigma_lung2k_1                                                                            
+      - rel_l2 = 0.3509                                                                                                                            
+  - 训练集平均 atlas baseline 反而更强：                                                                                                           
+      - /D:/010_CodePrograms/E/EIT_KTC2023_4/results/sigma_mean_lung2k_1                                                                           
+      - rel_l2 = 0.2552                                                                                                                            
+  - 这说明肺部任务的主矛盾不是重建整体胸腔形状，而是恢复 atlas 之上的局部小变化。                                                                  
+                                                                                                                                                   
+  6. 肺部归纳偏置适配                                                                                                                              
+     我已经系统试了这些 atlas-aware 变体：                                                                                                         
+                                                                                                                                                   
+  - atlas-residual DCT                                                                                                                             
+  - hybrid DCT                                                                                                                                     
+  - atlas-decoder                                                                                                                                  
+  - FC-SigmaUNet                                                                                                                                   
+                                                                                                                                                   
+  在低/高复杂度匹配实验上，结果都贴着 atlas baseline，没有真正超越它：                                                                             
+                                                                                                                                                   
+  - 汇总结果：/D:/010_CodePrograms/E/EIT_KTC2023_4/results/pulmonary_complexity_models_3/summary.json                                              
+  - 定性图：/D:/010_CodePrograms/E/EIT_KTC2023_4/results/pulmonary_complexity_visual_3/comparison.png                                              
+                                                                                                                                                   
+  7. 残差区域专门分析                                                                                                                              
+     我新增了 residual-focused 分析，只看 |sigma - atlas| > 0.08 的区域：                                                                          
+                                                                                                                                                   
+  - 汇总结果：/D:/010_CodePrograms/E/EIT_KTC2023_4/results/pulmonary_residual_focus_2/summary.json                                                 
+  - 图：/D:/010_CodePrograms/E/EIT_KTC2023_4/results/pulmonary_residual_focus_2/residual_focus_bar.png                                             
+                                                                                                                                                   
+  结论非常明确：                                                                                                                                   
+                                                                                                                                                   
+  - lung2k 上 residual-region RelL2                                                                                                                
+      - atlas: 0.3746                                                                                                                              
+      - residual DCT: 0.3747                                                                                                                       
+      - hybrid DCT: 0.3747                                                                                                                         
+      - atlas-decoder: 0.3746                                                                                                                      
+  - 也就是说，这些 atlas-aware 模型没有在真正的局部偏差区域带来实质收益。                                                                          
+                                                                                                                                                   
+  8. focus-loss 消融                                                                                                                               
+                                                                                                                                                   
+  - 我还做了 focus-loss 去除实验。                                                                                                                 
+  - 结果几乎不变：                                                                                                                                 
+      - 低复杂度 0.2008 -> 0.2007                                                                                                                  
+      - 高复杂度 0.2971 -> 0.2972                                                                                                                  
+  - 结论：问题不是 loss 没强调局部区域，而是 measurement -> residual 本身还不够强。                                                                
+                                                                                                                                                   
+  9. 肺部基线与效率                                                                                                                                
+                                                                                                                                                   
+  - 肺部 synthetic segmentation 上，FCUNet 目前精度更高：                                                                                          
+      - /D:/010_CodePrograms/E/EIT_KTC2023_4/results/fcunet_lung2k_2                                                                               
+      - mean_score = 0.7819                                                                                                                        
+  - DCT 肺部分割当前：                                                                                                                             
+      - /D:/010_CodePrograms/E/EIT_KTC2023_4/results/dct_predictor_lung2k_1                                                                        
+      - mean_score = 0.7272                                                                                                                        
+  - 但 DCT 仍然有明显效率优势：                                                                                                                    
+      - 参数量少约 10.6x                                                                                                                           
+      - 单样本延时快约 13.5x                                                                                                                       
+      - batch=32 的单样本平均延时快约 58.3x                                                                                                        
+                                                                                                                                                   
+  对当前研究的总体判断                                                                                                                             
+                                                                                                                                                   
+  - KTC2023 benchmark：DCT 已经是当前最强方法。                                                                                                    
+  - 肺部连续电导率：当前还没有超过强基线，但已经把问题定位得很清楚：                                                                               
+      - 不是 decoder 容量问题                                                                                                                      
+      - 不是简单 loss weighting 问题                                                                                                               
+      - 而是 measurement -> local residual inference 的问题                                                                                        
+  - 这反而让论文更清楚：                                                                                                                           
+    DCT 的价值在于低频归纳偏置、轻量化、实时性和数据中心分析，不是宣称在所有任务上绝对最优。                                                       
+                                                                                                                                                   
+  真实肺部数据情况                                                                                                                                 
+
+  - 已解析 /D:/010_CodePrograms/E/EIT_KTC2023_4/Subjects%20Data/Plos%20One%20Data
+  - 结论是：
+      - 真实 .get 数据可读
+      - 但没有真实电导率 GT
+      - 且是 16 电极 / 208 通道，与当前 32 电极 KTC 管线不匹配
+  - 所以它现在更适合作为未来 16 电极 Sim2Real 的方向，而不是当前监督主实验
+
+  论文状态
+
+  - LaTeX 主稿已经成型并持续更新：
+      - /D:/010_CodePrograms/E/EIT_KTC2023_4/paper/icic_eit_study.tex
+      - /D:/010_CodePrograms/E/EIT_KTC2023_4/paper/icic_eit_study.pdf
+  - 目前论文主叙事已经比较稳定：
+      - 数据生成与评分加速
+      - KTC benchmark 上的 DCT 优势
+      - 肺部任务中的 atlas dominance
+      - DCT 的效率优势
+      - 肺部连续回归的真正瓶颈定位
+
+  一句话总结
+  目前最成熟、最可信的研究结论是：
+
+  - DCT 是一个适合 EIT 的高效低频表示，在 KTC benchmark 上已经达到最强结果；
+  - 但肺部连续电导率任务本质上是“稳定解剖模板 + 局部小偏差”的问题，当前难点已经明确定位在 measurement -> residual，而不是图像表示或 decoder。      
+
+› 哪个是目前最好的预测图？为什么我看论文里的预测图完全没有展现出真实图间的差别？肺部应该使用16电极仿真数据吧？应该使用残差预测或时间差分预测吧？你 
+  觉得呢？
+                                                                                                                                                   
+
+• 我现在的判断很明确：
+                                                                                                                                                   
+  1. 目前“肺部连续电导率”里最好的预测图，不是某个真正学会局部变化的网络，而是几乎等价于 atlas baseline 的结果。                                    
+                                                                                                                                                   
+  按 lung2k 当前连续回归结果看：                                                                                                                   
+                                                                                                                                                   
+  - atlas baseline: /D:/010_CodePrograms/E/EIT_KTC2023_4/results/sigma_mean_lung2k_1/summary.json                                                  
+      - rel_l2 ≈ 0.2552                                                                                                                            
+  - atlas-decoder: /D:/010_CodePrograms/E/EIT_KTC2023_4/results/atlas_sigma_lung2k_1/dct_sigma_test_eval_1/summary.json                            
+      - rel_l2 ≈ 0.2552                                                                                                                            
+  - atlas-residual DCT: /D:/010_CodePrograms/E/EIT_KTC2023_4/results/dct_sigma_lung2k_residual_1/dct_sigma_residual_predictor_test_eval_1/         
+    summary.json
+      - rel_l2 ≈ 0.2552                                                                                                                            
+  - hybrid DCT: /D:/010_CodePrograms/E/EIT_KTC2023_4/results/dct_sigma_lung2k_hybrid_1/dct_sigma_hybrid_predictor_test_eval_1/summary.json         
+      - rel_l2 ≈ 0.2552                                                                                                                            
+                                                                                                                                                   
+  所以如果只问“当前哪张最好”，那答案其实是：                                                                                                       
+                                                                                                                                                   
+  - atlas-aware 这一组都差不多，最优数值上也只是贴着 atlas baseline。                                                                              
+  - 没有一个模型真正明显恢复了样本间的局部差异。                                                                                                   
+                                                                                                                                                   
+  2. 你觉得论文里的预测图“完全没有展现真实图间的差别”，这个判断是对的。                                                                            
+  原因不是排版，而是当前结果本身就在说明：                                                                                                         
+                                                                                                                                                   
+  - 模型学到了“平均肺部模板”                                                                                                                       
+  - 没学到“模板上的小变化”                                                                                                                         
+                                                                                                                                                   
+  我刚做完的 residual-focused 分析更直接证明了这件事：                                                                                             
+                                                                                                                                                   
+  - 汇总结果：/D:/010_CodePrograms/E/EIT_KTC2023_4/results/pulmonary_residual_focus_2/summary.json                                                 
+                                                                                                                                                   
+  在真正的偏差区域 |sigma - atlas| > 0.08 上：                                                                                                     
+                                                                                                                                                   
+  - lung2k residual-region RelL2                                                                                                                   
+      - atlas: 0.3746                                                                                                                              
+      - residual DCT: 0.3747                                                                                                                       
+      - hybrid DCT: 0.3747                                                                                                                         
+      - atlas-decoder: 0.3746                                                                                                                      
+                                                                                                                                                   
+  这说明：                                                                                                                                         
+                                                                                                                                                   
+  - 现在论文图里“预测图彼此很像”不是偶然
+  - 而是当前模型确实基本都停留在 atlas 附近
+
+  所以这类 raw sigma 图不适合继续作为肺部主图。
+  后面应该改成展示：
+
+  - GT absolute sigma
+  - Pred absolute sigma
+  - GT residual = sigma - atlas
+  - Pred residual = sigma_pred - atlas
+  - Residual error map
+
+  不然你看不到真正应该看的东西。
+
+  3. 肺部确实应该优先转向 16 电极仿真，而不是继续把 32 电极 KTC 风格当主线。
+  我现在也认为应该这样做，原因有三个：
+
+  - 你仓库里的真实肺部 .get 数据是 16 电极 / 208 通道
+  - 当前主训练链是 32 电极 / 2356 通道
+  - 这两者不匹配，导致现在的肺部实验更像“借用 KTC 工程框架做的肺部仿真研究”，而不是严格对接真实肺部 EIT
+
+  所以如果论文主题明确是肺部电阻抗成像，更合理的是：
+
+  - 新建 16 电极肺部仿真链
+  - forward / measurement layout / channel organization 都匹配真实 .get 数据
+
+  这个我认为已经不是“可选优化”，而是后续论文可信度的关键一步。
+
+  4. 肺部任务也确实更应该做残差预测或时间差分预测。
+  这点我现在是明确赞同的，而且比“继续做绝对 sigma”更合理。
+
+  原因很直接：
+
+  - 肺部绝对电导率图本来就有很强 atlas dominance
+  - 真实临床肺部 EIT 也更常见：
+      - relative imaging                                                                                                                           
+      - time-difference imaging                                                                                                                    
+      - ventilation-related change imaging                                                                                                         
+                                                                                                                                                   
+  所以更合适的目标应该是：                                                                                                                         
+                                                                                                                                                   
+  1. 静态残差预测                                                                                                                                  
+                                                                                                                                                   
+  - target = sigma - atlas                                                                                                                         
+  - 网络只负责恢复偏差部分                                                                                                                         
+  - 最终输出 = atlas + residual_pred                                                                                                               
+                                                                                                                                                   
+  2. 时间差分预测                                                                                                                                  
+                                                                                                                                                   
+  - target = sigma_t - sigma_ref                                                                                                                   
+  - 输入也改成差分测量                                                                                                                             
+  - 这更贴近肺通气监测                                                                                                                             
+                                                                                                                                                   
+  如果往真实肺部数据靠，我会更推荐：                                                                                                               
+                                                                                                                                                   
+  - 16 电极 + time-difference / residual imaging                                                                                                   
+    而不是：                                                                                                                                       
+  - 32 电极 + absolute sigma regression                                                                                                            
+                                                                                                                                                   
+  5. 我现在建议的下一步研究方向                                                                                                                    
+  我会把方向定成下面这条：                                                                                                                         
+                                                                                                                                                   
+  - 停止把当前 32 电极 absolute pulmonary sigma regression 当论文主结果                                                                            
+  - 把它降级成“说明 atlas dominance 的分析实验”                                                                                                    
+  - 重新建立 16 电极肺部仿真主线                                                                                                                   
+  - 主任务改成 residual / time-difference reconstruction                                                                                           
+  - DCT 方法也改成预测 residual 的低频表示，而不是绝对 sigma                                                                                       
+                                                                                                                                                   
+  一句话总结我的判断：                                                                                                                             
+                                                                                                                                                   
+  - 你说得对，当前肺部图展示不出样本差异，是因为模型基本没学到差异。                                                                               
+  - 肺部主线应该切到 16 电极。                                                                                                                     
+  - 目标应该优先做残差预测或时间差分预测。                                                                                                         
+  - 当前 absolute sigma 的结果更适合当“问题诊断”，不适合继续当论文主结果。                                                                         
+                                                                                                                                                   
+  如果你同意这个方向，我下一步就直接开始把研究主线切到：                                                                                           
+                                                                                                                                                   
+  - 16 电极肺部仿真                                                                                                                                
+  - residual / time-difference DCT predictor                                                                                                       
+  - 并重写论文肺部实验部分                                                                                                                         
+
+
+• 这轮我继续把肺部 16 电极时间差分线往前推了一步，新增了一个显式 change-aware 版本，并把结果写进了研究记录和肺部初稿。
+                                                                                                                                                   
+  代码上新增了：                                                                                                                                   
+                                                                                                                                                   
+  - /D:/010_CodePrograms/E/EIT_KTC2023_4/src/models/dct_predictor/model.py                                                                         
+  - /D:/010_CodePrograms/E/EIT_KTC2023_4/src/trainers/dct_sigma_td16_change_predictor_trainer.py                                                   
+  - /D:/010_CodePrograms/E/EIT_KTC2023_4/src/pipelines/dct_sigma_td16_change_predictor_pipeline.py                                                 
+                                                                                                                                                   
+  思路很直接：                                                                                                                                     
+                                                                                                                                                   
+  - 原来的 TD16 只预测 Δσ                                                                                                                          
+  - 新版额外预测一个样本级 change gate                                                                                                             
+  - 用 BCE 监督“这个样本是否真的有明显变化”                                                                                                        
+  - 再用 gate 去整体缩放预测的 Δσ                                                                                                                  
+  - 目标是降低 mixed 数据里零变化样本上的假阳性                                                                                                    
+                                                                                                                                                   
+  mixed pilot 的结果                                                                                                                               
+                                                                                                                                                   
+  - 原始 TD16：                                                                                                                                    
+      - /D:/010_CodePrograms/E/EIT_KTC2023_4/results/dct_sigma_td16_pilot_1/td16_test_eval_2/summary.json                                          
+      - RMSE = 0.0958
+      - active_rel_l2 = 0.9788                                                                                                                     
+  - sparse-only TD16：                                                                                                                             
+      - /D:/010_CodePrograms/E/EIT_KTC2023_4/results/dct_sigma_td16_sparse_mixed_1/td16_test_eval_1/summary.json                                   
+      - RMSE = 0.1038                                                                                                                              
+      - active_rel_l2 = 0.9255                                                                                                                     
+  - gate-only TD16：                                                                                                                               
+      - /D:/010_CodePrograms/E/EIT_KTC2023_4/results/dct_sigma_td16_change_mixed_1/td16_test_eval_1/summary.json                                   
+      - RMSE = 0.1012                                                                                                                              
+      - active_rel_l2 = 0.9521                                                                                                                     
+  - gate + sparse TD16：                                                                                                                           
+      - /D:/010_CodePrograms/E/EIT_KTC2023_4/results/dct_sigma_td16_change_sparse_mixed_1/td16_test_eval_1/summary.json                            
+      - RMSE = 0.1007                                                                                                                              
+      - active_rel_l2 = 0.9525                                                                                                                     
+  - zero baseline：                                                                                                                                
+      - /D:/010_CodePrograms/E/EIT_KTC2023_4/results/td16_zero_baseline_2/summary.json                                                             
+      - RMSE = 0.0835                                                                                                                              
+      - active_rel_l2 = 1.0000                                                                                                                     
+                                                                                                                                                   
+  当前结论                                                                                                                                         
+                                                                                                                                                   
+  - change-aware 方向是对的，因为它确实改善了 active region 的恢复。                                                                               
+  - 但现在最好的 learned mixed 版本也只是：                                                                                                        
+      - 比原始 TD16 更像真实局部变化                                                                                                               
+      - 比 sparse-only 更稳一点                                                                                                                    
+      - 仍然没有赢过 zero baseline 的全局 RMSE                                                                                                     
+  - 这说明当前肺部 TD16 的主矛盾已经更清楚了：                                                                                                     
+      - 不是 decoder 容量问题                                                                                                                      
+      - 不是单纯加稀疏项就能解决                                                                                                                   
+      - 而是 change/no-change 判别 + 条件残差回归 还需要更结构化的建模                                                                             
+                                                                                                                                                   
+  文档和论文都已更新：                                                                                                                             
+                                                                                                                                                   
+  - 研究记录：/D:/010_CodePrograms/E/EIT_KTC2023_4/GUIDE/pulmonary_16e_time_difference_exploration.md                                              
+  - 肺部初稿：/D:/010_CodePrograms/E/EIT_KTC2023_4/paper/pulmonary_preliminary/main.tex                                                            
+  - 更新后的 PDF：/D:/010_CodePrograms/E/EIT_KTC2023_4/paper/pulmonary_preliminary/main.pdf                                                        
+                                                                                                                                                   
+  下一步我会继续沿这条最清楚的方向推进：做更明确的“两阶段 change detection + residual regression”，而不是回到绝对图像回归。                        
+ 
+
+
+• 本轮结果
+  我继续把肺部 16 电极外部深度学习复现往前推进了一步，并把结果写进了研究记录和肺部初稿。
+
+  新增与更新：
+
+  - 新分析脚本：/D:/010_CodePrograms/E/EIT_KTC2023_4/scripts/analyze_td16_vae_gap.py
+  - 新融合脚本：/D:/010_CodePrograms/E/EIT_KTC2023_4/scripts/analyze_td16_vae_mask_fusion.py
+  - 新条件化模型链：
+      - /D:/010_CodePrograms/E/EIT_KTC2023_4/src/models/pulmonary_vae/model.py
+      - /D:/010_CodePrograms/E/EIT_KTC2023_4/src/configs/td16_vae_conditional_predictor_config.py
+      - /D:/010_CodePrograms/E/EIT_KTC2023_4/src/trainers/td16_vae_conditional_predictor_trainer.py
+      - /D:/010_CodePrograms/E/EIT_KTC2023_4/src/pipelines/td16_vae_conditional_predictor_pipeline.py
+  - 文档与论文：
+      - /D:/010_CodePrograms/E/EIT_KTC2023_4/GUIDE/pulmonary_external_baseline_reproduction.md
+      - /D:/010_CodePrograms/E/EIT_KTC2023_4/paper/pulmonary_preliminary/main.tex
+      - /D:/010_CodePrograms/E/EIT_KTC2023_4/paper/pulmonary_preliminary/main.pdf
+
+  关键定量结果：
+
+  - active-only VAE autoencoder vs predictor：
+      - /D:/010_CodePrograms/E/EIT_KTC2023_4/results/td16_vae_predictor_active_pilot_1/td16_vae_gap_2/summary.json
+      - autoencoder: RMSE 0.1189, active_rel_l2 0.7587
+      - predictor: RMSE 0.1315, active_rel_l2 0.9692
+  - mixed VAE autoencoder vs predictor：
+      - /D:/010_CodePrograms/E/EIT_KTC2023_4/results/td16_vae_predictor_mixed_pilot_1/td16_vae_gap_2/summary.json
+      - autoencoder: RMSE 0.0856, active_rel_l2 0.9983
+      - predictor: RMSE 0.0842, active_rel_l2 0.9983
+  - mixed mask-only + active-only VAE predictor 外部软融合：
+      - /D:/010_CodePrograms/E/EIT_KTC2023_4/results/td16_vae_predictor_active_pilot_1/td16_vae_mask_fusion_1/summary.json
+      - base active-only predictor on mixed: RMSE 0.0891, active_rel_l2 0.9525
+      - external soft fusion: RMSE 0.0862, active_rel_l2 0.9753
+  - 新的 mask-conditioned VAE predictor mixed pilot：
+      - /D:/010_CodePrograms/E/EIT_KTC2023_4/results/td16_vae_conditional_mixed_pilot_1/td16_test_eval_1/summary.json
+      - RMSE 0.0886, active_rel_l2 0.9686
+
+  当前判断
+  现在结论更清楚了：
+
+  - active-only 下，VAE manifold 本身可以，但 measurement -> latent 很差。
+  - mixed 下，不只是 predictor 差，连 VAE manifold 自己都已经塌到接近 zero-change。
+  - 外部 mask 融合能压假阳性，但会伤 active-region 幅值恢复。
+  - 把 mask 信号直接喂给 latent head 也不够，0.0886 / 0.9686 仍然没有超过更简单的外部 soft fusion。
+
+  所以肺部这条线当前最准确的表述是：
+
+  - GREIT 已复现，是可靠经典基线。
+  - Zeng-style VAE + latent predictor 的高层流程也已经在本地 matched TD16 协议上验证过。
+  - 但在当前小规模 mixed 数据上，主问题不是 decoder，而是 zero-change 主导下的表示塌陷和变化幅值恢复不足。
+
+  需要你代跑的长程实验
+  下一步最值得做的，不是继续在 64 样本上打转，而是上更大的 16 电极 matched dataset。这个阶段需要你本地终端或云端代跑，我建议直接跑下面
+  四组：
+
+  1. 生成更大的 mixed 数据：
+
+  python scripts/generate_lung_td16_data.py --num-images 2000 --output-dir dataset_lung_td16_mixed2k --normal-prob 0.25
+
+  2. 生成更大的 active-only 数据：
+
+  python scripts/generate_lung_td16_data.py --num-images 2000 --output-dir dataset_lung_td16_active2k --normal-prob 0.0
+
+  3. 训练 active-only VAE：
+
+  python scripts/train.py --method td16_vae --hdf5-path dataset_lung_td16_active2k/level_1/data.h5 --device cuda --num-workers 8
+  --epochs 80 --experiment-name td16_vae_active2k
+
+  4. 训练两条关键对照：
+
+  python scripts/train.py --method td16_vae_conditional_predictor --hdf5-path dataset_lung_td16_mixed2k/level_1/data.h5 --vae-
+  checkpoint results/td16_vae_active2k_1/best.pt --device cuda --num-workers 8 --epochs 120 --experiment-name
+  td16_vae_conditional_mixed2k
+
+  python scripts/train.py --method dct_sigma_td16_spatial_change_predictor --hdf5-path dataset_lung_td16_mixed2k/level_1/data.h5
+  --device cuda --num-workers 8 --epochs 120 --experiment-name dct_sigma_td16_spatial_mixed2k
+
+  如果你把这几组结果跑出来交给我，我下一轮就能把肺部研究从“小样本 exploratory”推进到有说服力的 matched 16 电极对比实验。
+
+  外部对齐依据：
+
+  - Zeng et al. 2023 EMBC full paper: https://microsites.arinex.com.au/EMBC/pdf/full-paper_737.pdf

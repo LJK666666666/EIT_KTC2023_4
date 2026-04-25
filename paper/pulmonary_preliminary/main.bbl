@@ -1,0 +1,43 @@
+\begin{thebibliography}{1}
+
+\bibitem{adler2009greit}
+Andy Adler, John~H. Arnold, Richard Bayford, Andrea Borsic, Brian Brown, Paul
+  Dixon, Theo J.~C. Faes, In{\'e}z Frerichs, Herv{\'e} Gagnon, Yvo G{\"a}rber,
+  Bart{\l}omiej Grychtol, G{\"u}nter Hahn, William R.~B. Lionheart, Anjum
+  Malik, Robert~P. Patterson, Janet Stocks, Andrew Tizzard, Norbert Weiler, and
+  Gerhard~K. Wolf.
+\newblock Greit: a unified approach to 2d linear eit reconstruction of lung
+  images.
+\newblock {\em Physiological Measurement}, 30(6):S35--S55, 2009.
+
+\bibitem{frerichs2017consensus}
+In{\'e}z Frerichs, Marcelo B.~P. Amato, Anton~H. van Kaam, David~G. Tingay,
+  Zhanqi Zhao, Bart{\l}omiej Grychtol, Markus Bodenstein, Herve Gagnon, Rishi
+  Bhatia, Vinicio Tomicic, et~al.
+\newblock Chest electrical impedance tomography examination, data analysis,
+  terminology, clinical use and recommendations: consensus statement of the
+  translational eit development study group.
+\newblock {\em Thorax}, 72(1):83--93, 2017.
+
+\bibitem{li2021thorax}
+Wenqi Li, Chang Li, Huan Wang, et~al.
+\newblock Image analysis for lung and heart separation in electrical impedance
+  tomography using one-dimensional convolutional neural networks and a thorax
+  simulation model.
+\newblock {\em PLOS ONE}, 16(2):e0246071, 2021.
+
+\bibitem{liu2018pyeit}
+Benyuan Liu, Bin Yang, Canhua Xu, Junying Xia, Meng Dai, Zhenyu Ji, Fusheng
+  You, Xiuzhen Dong, Xuetao Shi, and Feng Fu.
+\newblock pyeit: A python based framework for electrical impedance tomography.
+\newblock {\em SoftwareX}, 7:304--308, 2018.
+
+\bibitem{zeng2023lungdl}
+Shihao Zeng, Wang~Chun Kwok, Peng Cao, Fedi Zouari, Philip Tin~Yun Lee,
+  Russell~W. Chan, and Adrien Touboul.
+\newblock Deep learning based reconstruction enables high-resolution electrical
+  impedance tomography for lung function assessment.
+\newblock In {\em 2023 45th Annual International Conference of the IEEE
+  Engineering in Medicine \& Biology Society}, pages 1--4, 2023.
+
+\end{thebibliography}

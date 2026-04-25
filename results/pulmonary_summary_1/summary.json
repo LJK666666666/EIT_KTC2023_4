@@ -1,0 +1,12 @@
+{
+  "dct_512_mean_score": 0.513938728433389,
+  "dct_2k_mean_score": 0.7271840531849166,
+  "dct_2k_ensemble_mean_score": 0.7268752273425315,
+  "fcunet_2k_mean_score": 0.781911800497944,
+  "dct_params": 3853744,
+  "fcunet_params": 40701699,
+  "dct_single_latency_ms": 2.1364925007219426,
+  "fcunet_single_latency_ms": 28.82152500678785,
+  "dct_batch_per_sample_ms": 0.2503600000636652,
+  "fcunet_batch_per_sample_ms": 14.599793906336345
+}

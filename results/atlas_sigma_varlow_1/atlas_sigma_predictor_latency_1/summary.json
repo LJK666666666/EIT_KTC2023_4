@@ -1,0 +1,17 @@
+{
+  "method": "atlas_sigma_predictor",
+  "weights_dir": "results\\atlas_sigma_varlow_1",
+  "hdf5_path": "dataset_lung_varlow\\level_1\\data.h5",
+  "split": "test",
+  "device": "cuda",
+  "num_params": 7467994,
+  "num_trainable_params": 7467994,
+  "single_latency_ms_mean": 3.1829599998066747,
+  "single_latency_ms_std": 0.5218941452342227,
+  "batch_size": 32,
+  "batch_latency_ms_mean": 7.438856666703941,
+  "batch_latency_ms_std": 1.0323202550203718,
+  "batch_per_sample_ms_mean": 0.23246427083449817,
+  "warmup": 5,
+  "repeats": 30
+}

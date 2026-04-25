@@ -1,0 +1,13 @@
+{
+  "weights_dir": "results\\dct_sigma_td16_spatial_os3_mixed_2",
+  "hdf5_path": "dataset_lung_td16_pilot\\level_1\\data.h5",
+  "split": "test",
+  "method": "dct_sigma_td16_spatial_change_predictor",
+  "num_samples": 7,
+  "mae_mean": 0.031951478181644705,
+  "rmse_mean": 0.09253654156905781,
+  "rel_l2_mean": 212311554.6555142,
+  "active_rel_l2_mean": 0.9607539668287455,
+  "zero_delta_fraction": 0.42857142857142855,
+  "reconstruction_time_sec": 0.020600080490112305
+}

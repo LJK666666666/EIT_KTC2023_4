@@ -1,0 +1,11 @@
+{
+  "weights_dir": "results\\dct_sigma_varhigh_hybrid_1",
+  "hdf5_path": "dataset_lung_varhigh\\level_1\\data.h5",
+  "split": "test",
+  "method": "dct_sigma_hybrid_predictor",
+  "num_samples": 52,
+  "mae_mean": 0.16137590863234752,
+  "rmse_mean": 0.2363832466927069,
+  "rel_l2_mean": 0.2972745389975052,
+  "reconstruction_time_sec": 0.3484508991241455
+}

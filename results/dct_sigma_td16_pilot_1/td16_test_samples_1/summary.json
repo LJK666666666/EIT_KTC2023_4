@@ -1,0 +1,7 @@
+{
+  "weights_dir": "results\\dct_sigma_td16_pilot_1",
+  "hdf5_path": "dataset_lung_td16_pilot\\level_1\\data.h5",
+  "split": "test",
+  "method": "dct_sigma_td16_predictor",
+  "num_samples": 4
+}

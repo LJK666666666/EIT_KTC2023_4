@@ -1,4 +1,5 @@
 from .fcunet_config import get_configs as get_fcunet_config
+from .fc_sigmaunet_config import get_configs as get_fc_sigmaunet_config
 from .postp_config import get_configs as get_postp_config
 from .condd_config import get_configs as get_condd_config
 from .dpcaunet_config import get_configs as get_dpcaunet_config
@@ -8,3 +9,33 @@ from .sae_predictor_config import get_configs as get_sae_predictor_config
 from .vq_sae_config import get_configs as get_vq_sae_config
 from .vq_sae_predictor_config import get_configs as get_vq_sae_predictor_config
 from .dct_predictor_config import get_configs as get_dct_predictor_config
+from .dct_sigma_predictor_config import get_configs as get_dct_sigma_predictor_config
+from .dct_sigma_td16_predictor_config import (
+    get_configs as get_dct_sigma_td16_predictor_config,
+)
+from .dct_sigma_td16_change_predictor_config import (
+    get_configs as get_dct_sigma_td16_change_predictor_config,
+)
+from .dct_sigma_td16_spatial_change_predictor_config import (
+    get_configs as get_dct_sigma_td16_spatial_change_predictor_config,
+)
+from .dct_sigma_td16_conditional_predictor_config import (
+    get_configs as get_dct_sigma_td16_conditional_predictor_config,
+)
+from .dct_sigma_td16_mask_predictor_config import (
+    get_configs as get_dct_sigma_td16_mask_predictor_config,
+)
+from .td16_vae_config import get_configs as get_td16_vae_config
+from .td16_vae_predictor_config import get_configs as get_td16_vae_predictor_config
+from .td16_vae_conditional_predictor_config import (
+    get_configs as get_td16_vae_conditional_predictor_config,
+)
+from .dct_sigma_residual_predictor_config import (
+    get_configs as get_dct_sigma_residual_predictor_config,
+)
+from .dct_sigma_hybrid_predictor_config import (
+    get_configs as get_dct_sigma_hybrid_predictor_config,
+)
+from .atlas_sigma_predictor_config import (
+    get_configs as get_atlas_sigma_predictor_config,
+)

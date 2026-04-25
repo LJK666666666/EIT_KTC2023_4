@@ -91,6 +91,17 @@ The expanded HDF5 has:
 - average forward time about `104.3 ms/sample`
 - average total generation time about `108.6 ms/sample`
 
+This allows a first pulmonary data-scaling observation for the DCT route:
+
+- pilot (`512` samples) DCT test score:
+  - [`results/dct_predictor_lungpilot_1/dct_predictor_test_eval_1/summary.json`](/D:/010_CodePrograms/E/EIT_KTC2023_4/results/dct_predictor_lungpilot_1/dct_predictor_test_eval_1/summary.json)
+  - `mean_score = 0.513939`
+- expanded (`2048` samples) DCT test score:
+  - [`results/dct_predictor_lung2k_1/dct_predictor_test_eval_1/summary.json`](/D:/010_CodePrograms/E/EIT_KTC2023_4/results/dct_predictor_lung2k_1/dct_predictor_test_eval_1/summary.json)
+  - `mean_score = 0.727184`
+
+So for pulmonary DCT, moving from `512` to `2048` synthetic samples already produces a large gain, which suggests that data scaling remains an effective lever for the low-frequency fixed-basis route.
+
 ## Pulmonary Baselines
 
 A first quick training run with the current strongest benchmark-side model was completed:
@@ -204,9 +215,16 @@ So, unlike the benchmark-side KTC ensemble, the current pulmonary pair does not 
 
 The partial but already trained FCUNet pulmonary run was also evaluated directly on the same `dataset_lung_2k` test split:
 
-- [`results/fcunet_lung2k_2/fcunet_test_eval_2/summary.json`](/D:/010_CodePrograms/E/EIT_KTC2023_4/results/fcunet_lung2k_2/fcunet_test_eval_2/summary.json)
-- `mean_score = 0.781489`
-- `total_score = 160.986691`
+- intermediate checkpoint:
+  - [`results/fcunet_lung2k_2/fcunet_test_eval_2/summary.json`](/D:/010_CodePrograms/E/EIT_KTC2023_4/results/fcunet_lung2k_2/fcunet_test_eval_2/summary.json)
+  - `mean_score = 0.781489`
+  - `total_score = 160.986691`
+
+After continuing the same run to `20` full-training epochs, the updated best checkpoint reached:
+
+- [`results/fcunet_lung2k_2/fcunet_test_eval_3/summary.json`](/D:/010_CodePrograms/E/EIT_KTC2023_4/results/fcunet_lung2k_2/fcunet_test_eval_3/summary.json)
+- `mean_score = 0.781912`
+- `total_score = 161.073831`
 
 This result is substantially higher than the current pulmonary DCT runs:
 
@@ -222,6 +240,43 @@ The tradeoff is now explicit:
 
 - `dct_predictor` is much cheaper and faster to train
 - `fcunet` currently reconstructs pulmonary structures better on the held-out test split
+
+The current inference-time tradeoff on the same `206`-sample test split is:
+
+- FCUNet:
+  - reconstruction time `3.72 s`
+  - about `18.1 ms/sample`
+- pulmonary DCT single model:
+  - reconstruction time `0.36 s`
+  - about `1.73 ms/sample`
+- pulmonary DCT ensemble:
+  - reconstruction time `0.32 s`
+  - about `1.55 ms/sample`
+
+So FCUNet is currently the stronger pulmonary reconstructor, while DCT remains much lighter computationally.
+
+More directly, a dedicated latency benchmark gives:
+
+- [`results/dct_predictor_lung2k_1/dct_predictor_latency_1/summary.json`](/D:/010_CodePrograms/E/EIT_KTC2023_4/results/dct_predictor_lung2k_1/dct_predictor_latency_1/summary.json)
+  - parameters: `3.85M`
+  - single-sample latency: `2.136 ms`
+  - batch per-sample latency (`batch=32`): `0.250 ms`
+- [`results/fcunet_lung2k_2/fcunet_latency_1/summary.json`](/D:/010_CodePrograms/E/EIT_KTC2023_4/results/fcunet_lung2k_2/fcunet_latency_1/summary.json)
+  - parameters: `40.70M`
+  - single-sample latency: `28.822 ms`
+  - batch per-sample latency (`batch=32`): `14.600 ms`
+
+This makes the role separation very clear:
+
+- FCUNet is the stronger pulmonary baseline in reconstruction quality
+- DCT is the much lighter and faster proposed method
+- future pulmonary DCT work should therefore emphasize efficiency, deployability, and data-efficiency rather than claim the current best absolute pulmonary accuracy
+
+Paper-ready summary figures were generated in:
+
+- [`results/pulmonary_summary_1/pulmonary_score_scaling.png`](/D:/010_CodePrograms/E/EIT_KTC2023_4/results/pulmonary_summary_1/pulmonary_score_scaling.png)
+- [`results/pulmonary_summary_1/pulmonary_efficiency.png`](/D:/010_CodePrograms/E/EIT_KTC2023_4/results/pulmonary_summary_1/pulmonary_efficiency.png)
+- [`results/pulmonary_summary_1/summary.json`](/D:/010_CodePrograms/E/EIT_KTC2023_4/results/pulmonary_summary_1/summary.json)
 
 Therefore, pulmonary work should no longer assume that the DCT route is automatically the best choice simply because it wins on the benchmark phantom task.
 

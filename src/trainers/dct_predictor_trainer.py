@@ -26,6 +26,7 @@ class DCTPredictorTrainer(BaseTrainer):
         self.dice_loss = DiceLoss()
         self.vincl_dict = None
         self.test_sim_loader = None
+        self._probe_cache = None
 
     def build_model(self):
         model = DCTPredictor(
@@ -142,22 +143,56 @@ class DCTPredictorTrainer(BaseTrainer):
             return np.full(batch_size, fixed_level)
         return np.random.choice(np.arange(1, 8), size=batch_size)
 
+    def _get_probe_cache(self, max_samples: int):
+        if self.val_sim_loader is None:
+            return None, None
+        if self._probe_cache is not None:
+            measurements_cpu, gt_cpu = self._probe_cache
+        else:
+            measurements_list = []
+            gt_list = []
+            seen = 0
+            for measurements, gt_indices in self.val_sim_loader:
+                measurements_list.append(measurements.clone())
+                gt_list.append(gt_indices.clone())
+                seen += measurements.shape[0]
+                if max_samples > 0 and seen >= max_samples:
+                    break
+            measurements_cpu = torch.cat(measurements_list, dim=0)
+            gt_cpu = torch.cat(gt_list, dim=0)
+            if max_samples > 0:
+                measurements_cpu = measurements_cpu[:max_samples]
+                gt_cpu = gt_cpu[:max_samples]
+            self._probe_cache = (measurements_cpu, gt_cpu)
+        if max_samples > 0:
+            return measurements_cpu[:max_samples], gt_cpu[:max_samples]
+        return measurements_cpu, gt_cpu
+
     def _run_score_probe(self):
         if self.val_sim_loader is None:
             return {}
         max_samples = int(self.config.training.get(
             'score_probe_max_samples', 256) or 0)
+        probe_batch_size = int(self.config.training.get(
+            'score_probe_batch_size',
+            max(self.config.training.batch_size, 1)) or 0)
+        measurements_cpu, gt_cpu = self._get_probe_cache(max_samples)
+        if measurements_cpu is None or gt_cpu is None or measurements_cpu.shape[0] == 0:
+            return {}
         all_scores = []
         level_scores = {}
         for level in range(1, 8):
             level_preds = []
-            level_gts = []
-            seen = 0
-            for measurements, gt_indices in self.val_sim_loader:
-                for k in range(measurements.shape[0]):
-                    measurements[k, ~self.vincl_dict[level]] = 0.0
+            mask = torch.from_numpy(
+                self.vincl_dict[level].astype(np.bool_)
+            ).to(torch.bool)
+            total = measurements_cpu.shape[0]
+            chunk = total if probe_batch_size <= 0 else probe_batch_size
+            for start in range(0, total, chunk):
+                end = min(start + chunk, total)
+                measurements = measurements_cpu[start:end].clone()
+                measurements[:, ~mask] = 0.0
                 measurements = measurements.to(self.device)
-                gt_indices = gt_indices.to(self.device)
                 levels_tensor = torch.full(
                     (measurements.shape[0],), level,
                     dtype=torch.float, device=self.device)
@@ -166,15 +201,8 @@ class DCTPredictorTrainer(BaseTrainer):
                         logits, _ = self.model(measurements, levels_tensor)
                         preds = torch.argmax(logits, dim=1)
                 level_preds.append(preds.cpu().numpy().astype(np.int64))
-                level_gts.append(gt_indices.cpu().numpy().astype(np.int64))
-                seen += measurements.shape[0]
-                if max_samples > 0 and seen >= max_samples:
-                    break
             pred_np = np.concatenate(level_preds, axis=0)
-            gt_np = np.concatenate(level_gts, axis=0)
-            if max_samples > 0:
-                pred_np = pred_np[:max_samples]
-                gt_np = gt_np[:max_samples]
+            gt_np = gt_cpu.cpu().numpy().astype(np.int64)
             scores = fast_score_batch_auto(gt_np, pred_np, device=self.device)
             all_scores.extend(scores)
             level_scores[level] = float(np.mean(scores))
@@ -231,9 +259,11 @@ class DCTPredictorTrainer(BaseTrainer):
             'dice_loss': 0.0,
         }
         num_samples = 0
+        mask = torch.from_numpy(
+            self.vincl_dict[fixed_level].astype(np.bool_)
+        ).to(torch.bool)
         for measurements, gt_indices in self.val_sim_loader:
-            for k in range(measurements.shape[0]):
-                measurements[k, ~self.vincl_dict[fixed_level]] = 0.0
+            measurements[:, ~mask] = 0.0
             measurements = measurements.to(self.device)
             gt_indices = gt_indices.to(self.device)
             gt_onehot = F.one_hot(
@@ -297,9 +327,11 @@ class DCTPredictorTrainer(BaseTrainer):
         num_samples = 0
         all_preds = []
         all_gts = []
+        mask = torch.from_numpy(
+            self.vincl_dict[fixed_level].astype(np.bool_)
+        ).to(torch.bool)
         for measurements, gt_indices in self.test_sim_loader:
-            for k in range(measurements.shape[0]):
-                measurements[k, ~self.vincl_dict[fixed_level]] = 0.0
+            measurements[:, ~mask] = 0.0
             measurements = measurements.to(self.device)
             gt_indices = gt_indices.to(self.device)
             gt_onehot = F.one_hot(

@@ -1,0 +1,11 @@
+{
+  "weights_dir": "results\\dct_sigma_td16_smoke_1",
+  "hdf5_path": "dataset_lung_td16_smoke\\level_1\\data.h5",
+  "split": "test",
+  "method": "dct_sigma_td16_predictor",
+  "num_samples": 2,
+  "mae_mean": 0.037590552572504154,
+  "rmse_mean": 0.12396955645764145,
+  "rel_l2_mean": 1.0783855653920207,
+  "reconstruction_time_sec": 0.019891738891601562
+}

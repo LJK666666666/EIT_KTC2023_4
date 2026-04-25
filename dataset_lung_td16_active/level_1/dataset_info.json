@@ -1,0 +1,17 @@
+{
+  "num_images": 64,
+  "dataset_path": "dataset_lung_td16_active/level_1/data.h5",
+  "electrodes": 16,
+  "raw_measurements_per_pattern": 16,
+  "reordered_measurement_dim": 208,
+  "target_type": "time_difference_conductivity",
+  "avg_forward_ms": 182.21328780055046,
+  "avg_total_ms": 187.41721659898758,
+  "seed": 1,
+  "anatomy_scale": 1.0,
+  "pathology_scale": 1.0,
+  "detail_scale": 1.0,
+  "conductivity_scale": 1.0,
+  "texture_scale": 0.0,
+  "normal_prob": 0.0
+}

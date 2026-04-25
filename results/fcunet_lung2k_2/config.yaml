@@ -2097,7 +2097,7 @@ training:
   log_freq: 50
   lr: 3.0e-05
   max_iters: null
-  num_workers: 0
+  num_workers: 4
   pin_memory: true
   precision: bf16
   resume_from: results\fcunet_lung2k_2\last.pt

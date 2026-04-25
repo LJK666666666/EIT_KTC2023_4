@@ -1,0 +1,13 @@
+{
+  "weights_dir": "results\\dct_sigma_td16_sparse_mixed_1",
+  "hdf5_path": "dataset_lung_td16_pilot\\level_1\\data.h5",
+  "split": "test",
+  "method": "dct_sigma_td16_predictor",
+  "num_samples": 7,
+  "mae_mean": 0.047717984658627643,
+  "rmse_mean": 0.10379988779510622,
+  "rel_l2_mean": 412175418.4611319,
+  "active_rel_l2_mean": 0.9254973223538501,
+  "zero_delta_fraction": 0.42857142857142855,
+  "reconstruction_time_sec": 0.030971288681030273
+}

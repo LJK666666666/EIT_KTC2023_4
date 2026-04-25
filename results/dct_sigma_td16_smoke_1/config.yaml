@@ -1,0 +1,50 @@
+data:
+  hdf5_path: dataset_lung_td16_smoke\level_1\data.h5
+  im_size: 256
+  test_indices:
+  - 3
+  - 5
+  train_indices:
+  - 7
+  - 2
+  - 1
+  - 6
+  - 0
+  - 4
+  use_hdf5: true
+  val_indices: null
+device: cpu
+model:
+  coeff_size: 24
+  dropout: 0.1
+  hidden_dims: !!python/tuple
+  - 512
+  - 256
+  - 256
+  input_dim: 208
+  level_embed_dim: 16
+  out_channels: 1
+seed: 1
+training:
+  batch_size: 4
+  coeff_loss_weight: 0.25
+  early_stopping_patience: 15
+  enable_tensorboard: false
+  epochs: 1
+  grad_clip_norm: 1.0
+  log_freq: 50
+  lr: 0.0003
+  mae_weight: 0.2
+  max_iters: null
+  mse_weight: 1.0
+  num_workers: 0
+  pin_memory: true
+  precision: bf16
+  resume_from: null
+  save_freq: 5
+  scheduler_factor: 0.7
+  scheduler_patience: 3
+  selection_metric: val_rel_l2
+  selection_metric_mode: min
+  val_freq: 1
+  weight_decay: 0.0001

@@ -1,0 +1,13 @@
+{
+  "weights_dir": "results\\dct_sigma_td16_conditional_tf1_mixed_1",
+  "hdf5_path": "dataset_lung_td16_pilot\\level_1\\data.h5",
+  "split": "test",
+  "method": "dct_sigma_td16_conditional_predictor",
+  "num_samples": 7,
+  "mae_mean": 0.035301990148631855,
+  "rmse_mean": 0.09597891842366903,
+  "rel_l2_mean": 280615713.55095655,
+  "active_rel_l2_mean": 0.9486629776195725,
+  "zero_delta_fraction": 0.42857142857142855,
+  "reconstruction_time_sec": 0.023193836212158203
+}

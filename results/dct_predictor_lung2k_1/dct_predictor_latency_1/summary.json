@@ -1,0 +1,17 @@
+{
+  "method": "dct_predictor",
+  "weights_dir": "results\\dct_predictor_lung2k_1",
+  "hdf5_path": "dataset_lung_2k\\level_1\\data.h5",
+  "split": "test",
+  "device": "cuda",
+  "num_params": 3853744,
+  "num_trainable_params": 3853744,
+  "single_latency_ms_mean": 2.1364925007219426,
+  "single_latency_ms_std": 0.8675801662252584,
+  "batch_size": 32,
+  "batch_latency_ms_mean": 8.011520002037287,
+  "batch_latency_ms_std": 1.2356417943872748,
+  "batch_per_sample_ms_mean": 0.2503600000636652,
+  "warmup": 10,
+  "repeats": 40
+}

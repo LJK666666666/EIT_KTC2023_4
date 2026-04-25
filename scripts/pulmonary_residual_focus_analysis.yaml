@@ -1,0 +1,75 @@
+device: cuda
+batch_size: 64
+
+datasets:
+  - name: low
+    hdf5_path: dataset_lung_varlow/level_1/data.h5
+    split: test
+    residual_threshold: 0.08
+    atlas_dir: results/dct_sigma_varlow_residual_1
+    methods:
+      atlas:
+        type: atlas_baseline
+        weights_dir: results/dct_sigma_varlow_residual_1
+      direct:
+        type: dct_sigma_predictor
+        weights_dir: results/dct_sigma_varlow_direct_1
+      residual:
+        type: dct_sigma_residual_predictor
+        weights_dir: results/dct_sigma_varlow_residual_1
+      hybrid:
+        type: dct_sigma_hybrid_predictor
+        weights_dir: results/dct_sigma_varlow_hybrid_1
+      atlas_decoder:
+        type: atlas_sigma_predictor
+        weights_dir: results/atlas_sigma_varlow_1
+      fc_sigmaunet:
+        type: fc_sigmaunet
+        weights_dir: results/fc_sigmaunet_varlow_pilot_1
+
+  - name: high
+    hdf5_path: dataset_lung_varhigh/level_1/data.h5
+    split: test
+    residual_threshold: 0.08
+    atlas_dir: results/dct_sigma_varhigh_residual_1
+    methods:
+      atlas:
+        type: atlas_baseline
+        weights_dir: results/dct_sigma_varhigh_residual_1
+      direct:
+        type: dct_sigma_predictor
+        weights_dir: results/dct_sigma_varhigh_direct_1
+      residual:
+        type: dct_sigma_residual_predictor
+        weights_dir: results/dct_sigma_varhigh_residual_1
+      hybrid:
+        type: dct_sigma_hybrid_predictor
+        weights_dir: results/dct_sigma_varhigh_hybrid_1
+      atlas_decoder:
+        type: atlas_sigma_predictor
+        weights_dir: results/atlas_sigma_varhigh_1
+      fc_sigmaunet:
+        type: fc_sigmaunet
+        weights_dir: results/fc_sigmaunet_varhigh_pilot_1
+
+  - name: lung2k
+    hdf5_path: dataset_lung_2k/level_1/data.h5
+    split: test
+    residual_threshold: 0.08
+    atlas_dir: results/dct_sigma_lung2k_residual_1
+    methods:
+      atlas:
+        type: atlas_baseline
+        weights_dir: results/dct_sigma_lung2k_residual_1
+      direct:
+        type: dct_sigma_predictor
+        weights_dir: results/dct_sigma_lung2k_1
+      residual:
+        type: dct_sigma_residual_predictor
+        weights_dir: results/dct_sigma_lung2k_residual_1
+      hybrid:
+        type: dct_sigma_hybrid_predictor
+        weights_dir: results/dct_sigma_lung2k_hybrid_1
+      atlas_decoder:
+        type: atlas_sigma_predictor
+        weights_dir: results/atlas_sigma_lung2k_1

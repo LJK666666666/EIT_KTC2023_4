@@ -1,0 +1,272 @@
+{
+  "config": "scripts/pulmonary_residual_focus_analysis.yaml",
+  "device": "cuda",
+  "batch_size": 64,
+  "datasets": [
+    {
+      "name": "low",
+      "hdf5_path": "dataset_lung_varlow/level_1/data.h5",
+      "split": "test",
+      "num_samples": 52,
+      "residual_threshold": 0.08,
+      "methods": {
+        "atlas": {
+          "global": {
+            "mae_mean": 0.09779437855964572,
+            "rmse_mean": 0.15544088410466028,
+            "rel_l2_mean": 0.20063226526323963
+          },
+          "residual_region": {
+            "mae_mean": 0.24155786149618835,
+            "rmse_mean": 0.29328652975159764,
+            "rel_l2_mean": 0.3548198969071249,
+            "residual_fraction": 0.18904260488656852,
+            "samples_with_residual_fraction": 1.0
+          }
+        },
+        "direct": {
+          "global": {
+            "mae_mean": 0.5028918219389096,
+            "rmse_mean": 0.5401168056568257,
+            "rel_l2_mean": 0.6943514821397943
+          },
+          "residual_region": {
+            "mae_mean": 0.5337900901295977,
+            "rmse_mean": 0.6205742639817665,
+            "rel_l2_mean": 0.7339170025027071,
+            "residual_fraction": 0.18904260488656852,
+            "samples_with_residual_fraction": 1.0
+          }
+        },
+        "residual": {
+          "global": {
+            "mae_mean": 0.09773846912275672,
+            "rmse_mean": 0.1555741033935873,
+            "rel_l2_mean": 0.2008364180320069
+          },
+          "residual_region": {
+            "mae_mean": 0.2412849759628442,
+            "rmse_mean": 0.2934958302200466,
+            "rel_l2_mean": 0.3550590601428097,
+            "residual_fraction": 0.18904260488656852,
+            "samples_with_residual_fraction": 1.0
+          }
+        },
+        "hybrid": {
+          "global": {
+            "mae_mean": 0.09806232729547466,
+            "rmse_mean": 0.1558060607655386,
+            "rel_l2_mean": 0.20124252805837736
+          },
+          "residual_region": {
+            "mae_mean": 0.24157951317557974,
+            "rmse_mean": 0.2936952059271858,
+            "rel_l2_mean": 0.35550809977386966,
+            "residual_fraction": 0.18904260488656852,
+            "samples_with_residual_fraction": 1.0
+          }
+        },
+        "atlas_decoder": {
+          "global": {
+            "mae_mean": 0.09777501176937459,
+            "rmse_mean": 0.15542663223295605,
+            "rel_l2_mean": 0.20061580647265947
+          },
+          "residual_region": {
+            "mae_mean": 0.24153976601837204,
+            "rmse_mean": 0.2932702226842521,
+            "rel_l2_mean": 0.35478318113090407,
+            "residual_fraction": 0.18904260488656852,
+            "samples_with_residual_fraction": 1.0
+          }
+        },
+        "fc_sigmaunet": {
+          "global": {
+            "mae_mean": 0.10131447636619526,
+            "rmse_mean": 0.15911056778777083,
+            "rel_l2_mean": 0.2048834038031986
+          },
+          "residual_region": {
+            "mae_mean": 0.24135565015349028,
+            "rmse_mean": 0.29640822793284904,
+            "rel_l2_mean": 0.35827472986315334,
+            "residual_fraction": 0.18904260488656852,
+            "samples_with_residual_fraction": 1.0
+          }
+        }
+      }
+    },
+    {
+      "name": "high",
+      "hdf5_path": "dataset_lung_varhigh/level_1/data.h5",
+      "split": "test",
+      "num_samples": 52,
+      "residual_threshold": 0.08,
+      "methods": {
+        "atlas": {
+          "global": {
+            "mae_mean": 0.16160013310468682,
+            "rmse_mean": 0.23639888189369532,
+            "rel_l2_mean": 0.29717647346740567
+          },
+          "residual_region": {
+            "mae_mean": 0.25251307737526657,
+            "rmse_mean": 0.313594885180265,
+            "rel_l2_mean": 0.38494632906579773,
+            "residual_fraction": 0.3575800382173978,
+            "samples_with_residual_fraction": 1.0
+          }
+        },
+        "direct": {
+          "global": {
+            "mae_mean": 0.5238987991716387,
+            "rmse_mean": 0.579207700097418,
+            "rel_l2_mean": 0.722976374454309
+          },
+          "residual_region": {
+            "mae_mean": 0.5442747729256671,
+            "rmse_mean": 0.6256576676723108,
+            "rel_l2_mean": 0.7585607097847495,
+            "residual_fraction": 0.3575800382173978,
+            "samples_with_residual_fraction": 1.0
+          }
+        },
+        "residual": {
+          "global": {
+            "mae_mean": 0.1613817913889448,
+            "rmse_mean": 0.23639559519700695,
+            "rel_l2_mean": 0.2971319139954525
+          },
+          "residual_region": {
+            "mae_mean": 0.25193653994606807,
+            "rmse_mean": 0.3135791948258773,
+            "rel_l2_mean": 0.38488709629268825,
+            "residual_fraction": 0.3575800382173978,
+            "samples_with_residual_fraction": 1.0
+          }
+        },
+        "hybrid": {
+          "global": {
+            "mae_mean": 0.16137590863234752,
+            "rmse_mean": 0.2363832466927069,
+            "rel_l2_mean": 0.2972745389975052
+          },
+          "residual_region": {
+            "mae_mean": 0.2520718187912486,
+            "rmse_mean": 0.31356506206123996,
+            "rel_l2_mean": 0.3851044714028833,
+            "residual_fraction": 0.3575800382173978,
+            "samples_with_residual_fraction": 1.0
+          }
+        },
+        "atlas_decoder": {
+          "global": {
+            "mae_mean": 0.16160692824785355,
+            "rmse_mean": 0.2363980064770274,
+            "rel_l2_mean": 0.29717858302829664
+          },
+          "residual_region": {
+            "mae_mean": 0.25250458545569,
+            "rmse_mean": 0.31358819450219083,
+            "rel_l2_mean": 0.38494736372364796,
+            "residual_fraction": 0.3575800382173978,
+            "samples_with_residual_fraction": 1.0
+          }
+        },
+        "fc_sigmaunet": {
+          "global": {
+            "mae_mean": 0.16429641331091224,
+            "rmse_mean": 0.2399706223899395,
+            "rel_l2_mean": 0.3009544915188514
+          },
+          "residual_region": {
+            "mae_mean": 0.25530459558684376,
+            "rmse_mean": 0.317955017902643,
+            "rel_l2_mean": 0.38852850281874657,
+            "residual_fraction": 0.3575800382173978,
+            "samples_with_residual_fraction": 1.0
+          }
+        }
+      }
+    },
+    {
+      "name": "lung2k",
+      "hdf5_path": "dataset_lung_2k/level_1/data.h5",
+      "split": "test",
+      "num_samples": 206,
+      "residual_threshold": 0.08,
+      "methods": {
+        "atlas": {
+          "global": {
+            "mae_mean": 0.13146590746099276,
+            "rmse_mean": 0.2025261409463778,
+            "rel_l2_mean": 0.2551629878669322
+          },
+          "residual_region": {
+            "mae_mean": 0.2476503854047482,
+            "rmse_mean": 0.3057128014911667,
+            "rel_l2_mean": 0.37459293201110266,
+            "residual_fraction": 0.2980345938969584,
+            "samples_with_residual_fraction": 1.0
+          }
+        },
+        "direct": {
+          "global": {
+            "mae_mean": 0.22306750660253047,
+            "rmse_mean": 0.28064743932340735,
+            "rel_l2_mean": 0.35090702186816425
+          },
+          "residual_region": {
+            "mae_mean": 0.28970496008690355,
+            "rmse_mean": 0.3595016890377115,
+            "rel_l2_mean": 0.4346089507610831,
+            "residual_fraction": 0.2980345938969584,
+            "samples_with_residual_fraction": 1.0
+          }
+        },
+        "residual": {
+          "global": {
+            "mae_mean": 0.13114512753202548,
+            "rmse_mean": 0.20254329728514847,
+            "rel_l2_mean": 0.25517836343723416
+          },
+          "residual_region": {
+            "mae_mean": 0.24694537204230396,
+            "rmse_mean": 0.30577181901479794,
+            "rel_l2_mean": 0.3746766473323198,
+            "residual_fraction": 0.2980345938969584,
+            "samples_with_residual_fraction": 1.0
+          }
+        },
+        "hybrid": {
+          "global": {
+            "mae_mean": 0.13099551365904244,
+            "rmse_mean": 0.2025813825643026,
+            "rel_l2_mean": 0.2551935148344761
+          },
+          "residual_region": {
+            "mae_mean": 0.2466569572674109,
+            "rmse_mean": 0.30586232531251367,
+            "rel_l2_mean": 0.3747399267896605,
+            "residual_fraction": 0.2980345938969584,
+            "samples_with_residual_fraction": 1.0
+          }
+        },
+        "atlas_decoder": {
+          "global": {
+            "mae_mean": 0.13144777677508085,
+            "rmse_mean": 0.20254287707929522,
+            "rel_l2_mean": 0.2551569451308074
+          },
+          "residual_region": {
+            "mae_mean": 0.24760242816780917,
+            "rmse_mean": 0.3057342430118656,
+            "rel_l2_mean": 0.37457935114097685,
+            "residual_fraction": 0.2980345938969584,
+            "samples_with_residual_fraction": 1.0
+          }
+        }
+      }
+    }
+  ]
+}

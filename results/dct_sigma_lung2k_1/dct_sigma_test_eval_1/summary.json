@@ -1,0 +1,10 @@
+{
+  "weights_dir": "results/dct_sigma_lung2k_1",
+  "hdf5_path": "dataset_lung_2k/level_1/data.h5",
+  "split": "test",
+  "num_samples": 206,
+  "mae_mean": 0.22306750660253047,
+  "rmse_mean": 0.28064743932340735,
+  "rel_l2_mean": 0.35090702186816425,
+  "reconstruction_time_sec": 0.2610609531402588
+}

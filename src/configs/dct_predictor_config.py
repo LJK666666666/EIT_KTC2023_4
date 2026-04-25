@@ -17,8 +17,9 @@ def get_configs():
     training.scheduler_patience = 3
     training.scheduler_factor = 0.7
     training.early_stopping_patience = 15
-    training.score_probe_freq = 1
+    training.score_probe_freq = 2
     training.score_probe_max_samples = 256
+    training.score_probe_batch_size = 256
     training.selection_metric = 'val_probe_score_total'
     training.selection_metric_mode = 'max'
     training.coeff_loss_weight = 0.5

@@ -1,0 +1,17 @@
+{
+  "method": "fc_sigmaunet",
+  "weights_dir": "results\\fc_sigmaunet_varlow_pilot_1",
+  "hdf5_path": "dataset_lung_varlow\\level_1\\data.h5",
+  "split": "test",
+  "device": "cuda",
+  "num_params": 40700545,
+  "num_trainable_params": 40700545,
+  "single_latency_ms_mean": 40.774504999717465,
+  "single_latency_ms_std": 3.9951218730719438,
+  "batch_size": 32,
+  "batch_latency_ms_mean": 361.9565250002779,
+  "batch_latency_ms_std": 3.397666040298211,
+  "batch_per_sample_ms_mean": 11.311141406258685,
+  "warmup": 5,
+  "repeats": 20
+}

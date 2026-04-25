@@ -1,0 +1,28 @@
+{
+  "weights_dir": "results\\dct_sigma_td16_conditional_mixed_2",
+  "hdf5_path": "dataset_lung_td16_pilot\\level_1\\data.h5",
+  "split": "test",
+  "model_kind": "conditional",
+  "num_samples": 7,
+  "active_threshold": 0.02,
+  "mask_threshold": 0.02,
+  "standard": {
+    "mae_mean": 0.033962599605845016,
+    "rmse_mean": 0.09497719253619231,
+    "rel_l2_mean": 262145380.04461625,
+    "active_rel_l2_mean": 0.9503622258601632
+  },
+  "oracle_output_mask": {
+    "mae_mean": 0.014291512187104892,
+    "rmse_mean": 0.07522042390697835,
+    "rel_l2_mean": 0.5174571317578478,
+    "active_rel_l2_mean": 0.9055499805762339
+  },
+  "oracle_condition_and_mask": {
+    "mae_mean": 0.014018915268894415,
+    "rmse_mean": 0.07386776931303732,
+    "rel_l2_mean": 0.50547462680519,
+    "active_rel_l2_mean": 0.8845805969090826
+  },
+  "diagnostic_time_sec": 0.09593558311462402
+}

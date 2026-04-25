@@ -47,11 +47,22 @@ def parse_args():
         description='Train KTC2023 EIT reconstruction models')
 
     parser.add_argument('--method', type=str, required=True,
-                        choices=['fcunet', 'postp', 'condd', 'dpcaunet',
-                                 'hcdpcaunet', 'sae', 'sae_predictor',
-                                 'vq_sae', 'vq_sae_predictor',
-                                 'dct_predictor'],
-                        help='Training method')
+                         choices=['fcunet', 'postp', 'condd', 'dpcaunet',
+                                  'hcdpcaunet', 'sae', 'sae_predictor',
+                                  'vq_sae', 'vq_sae_predictor',
+                                   'td16_vae', 'td16_vae_predictor',
+                                   'td16_vae_conditional_predictor',
+                                   'dct_predictor', 'dct_sigma_predictor',
+                                    'dct_sigma_td16_predictor',
+                                    'dct_sigma_td16_change_predictor',
+                                    'dct_sigma_td16_spatial_change_predictor',
+                                    'dct_sigma_td16_conditional_predictor',
+                                    'dct_sigma_td16_mask_predictor',
+                                    'dct_sigma_residual_predictor',
+                                  'dct_sigma_hybrid_predictor',
+                                  'atlas_sigma_predictor',
+                                  'fc_sigmaunet'],
+                          help='Training method')
     parser.add_argument('--level', type=int, default=1,
                         help='Difficulty level for CondD (1-7)')
 
@@ -82,6 +93,8 @@ def parse_args():
     # SAE predictor specific
     parser.add_argument('--sae-checkpoint', type=str, default=None,
                         help='Path to trained SAE best.pt (for sae_predictor)')
+    parser.add_argument('--vae-checkpoint', type=str, default=None,
+                        help='Path to trained TD16 VAE best.pt (for td16_vae_predictor / td16_vae_conditional_predictor)')
     parser.add_argument('--latent-h5-path', type=str, default=None,
                         help='Path to latent_codes.h5 (for sae_predictor)')
     parser.add_argument('--vq-sae-checkpoint', type=str, default=None,
@@ -107,7 +120,31 @@ def parse_args():
     parser.add_argument('--coeff-size', type=int, default=None,
                         help='Override DCT coefficient size')
     parser.add_argument('--coeff-loss-weight', type=float, default=None,
-                        help='Override DCT coefficient regression loss weight')
+                         help='Override DCT coefficient regression loss weight')
+    parser.add_argument('--focus-loss-weight', type=float, default=None,
+                        help='Override atlas-deviation focus loss weight')
+    parser.add_argument('--focus-threshold', type=float, default=None,
+                        help='Override atlas-deviation focus threshold')
+    parser.add_argument('--inactive-weight', type=float, default=None,
+                        help='Override inactive-region loss weight')
+    parser.add_argument('--pred-l1-weight', type=float, default=None,
+                        help='Override prediction sparsity L1 loss weight')
+    parser.add_argument('--active-region-threshold', type=float, default=None,
+                        help='Override threshold for defining active delta region')
+    parser.add_argument('--change-threshold', type=float, default=None,
+                        help='Override threshold for defining sample-level change')
+    parser.add_argument('--lambda-gate', type=float, default=None,
+                        help='Override sample-level gate BCE loss weight')
+    parser.add_argument('--lambda-mask', type=float, default=None,
+                        help='Override spatial change mask BCE loss weight')
+    parser.add_argument('--lambda-mask-coeff', type=float, default=None,
+                        help='Override low-frequency change-mask coeff loss weight')
+    parser.add_argument('--mask-threshold', type=float, default=None,
+                        help='Override threshold for spatial active-mask target')
+    parser.add_argument('--mask-teacher-forcing-ratio', type=float, default=None,
+                        help='Teacher-forcing ratio for conditional TD16 mask branch')
+    parser.add_argument('--active-oversample-factor', type=float, default=None,
+                        help='Oversample active-change samples in TD16 mixed training')
     parser.add_argument('--ce-weight', type=float, default=None,
                         help='Override cross-entropy loss weight')
     parser.add_argument('--dice-weight', type=float, default=None,
@@ -116,6 +153,8 @@ def parse_args():
                         help='Override model dropout')
     parser.add_argument('--fixed-level', type=int, default=None,
                         help='Train/validate on a fixed level only')
+    parser.add_argument('--score-probe-freq', type=int, default=None,
+                        help='Run DCT fast probe every N epochs')
     parser.add_argument('--score-probe-max-samples', type=int, default=None,
                         help='Max validation samples used for fast probe score')
 
@@ -229,6 +268,38 @@ def main():
             config.vq_sae.latent_h5_path = args.latent_h5_path
         trainer = VQSAEPredictorTrainer(config=config, experiment_name=name)
 
+    elif args.method == 'td16_vae':
+        from src.configs import get_td16_vae_config
+        from src.trainers import TD16VAETrainer
+
+        config = get_td16_vae_config()
+        name = args.experiment_name or 'td16_vae_baseline'
+        _apply_overrides(config, args)
+        trainer = TD16VAETrainer(config=config, experiment_name=name)
+
+    elif args.method == 'td16_vae_predictor':
+        from src.configs import get_td16_vae_predictor_config
+        from src.trainers import TD16VAEPredictorTrainer
+
+        config = get_td16_vae_predictor_config()
+        name = args.experiment_name or 'td16_vae_predictor_baseline'
+        _apply_overrides(config, args)
+        if args.vae_checkpoint:
+            config.vae.checkpoint = args.vae_checkpoint
+        trainer = TD16VAEPredictorTrainer(config=config, experiment_name=name)
+
+    elif args.method == 'td16_vae_conditional_predictor':
+        from src.configs import get_td16_vae_conditional_predictor_config
+        from src.trainers import TD16VAEConditionalPredictorTrainer
+
+        config = get_td16_vae_conditional_predictor_config()
+        name = args.experiment_name or 'td16_vae_conditional_predictor_baseline'
+        _apply_overrides(config, args)
+        if args.vae_checkpoint:
+            config.vae.checkpoint = args.vae_checkpoint
+        trainer = TD16VAEConditionalPredictorTrainer(
+            config=config, experiment_name=name)
+
     elif args.method == 'dct_predictor':
         from src.configs import get_dct_predictor_config
         from src.trainers import DCTPredictorTrainer
@@ -237,6 +308,104 @@ def main():
         name = args.experiment_name or 'dct_predictor_baseline'
         _apply_overrides(config, args)
         trainer = DCTPredictorTrainer(config=config, experiment_name=name)
+
+    elif args.method == 'dct_sigma_predictor':
+        from src.configs import get_dct_sigma_predictor_config
+        from src.trainers import DCTSigmaPredictorTrainer
+
+        config = get_dct_sigma_predictor_config()
+        name = args.experiment_name or 'dct_sigma_predictor_baseline'
+        _apply_overrides(config, args)
+        trainer = DCTSigmaPredictorTrainer(config=config, experiment_name=name)
+
+    elif args.method == 'dct_sigma_td16_predictor':
+        from src.configs import get_dct_sigma_td16_predictor_config
+        from src.trainers import DCTSigmaTD16PredictorTrainer
+
+        config = get_dct_sigma_td16_predictor_config()
+        name = args.experiment_name or 'dct_sigma_td16_predictor_baseline'
+        _apply_overrides(config, args)
+        trainer = DCTSigmaTD16PredictorTrainer(
+            config=config, experiment_name=name)
+
+    elif args.method == 'dct_sigma_td16_change_predictor':
+        from src.configs import get_dct_sigma_td16_change_predictor_config
+        from src.trainers import DCTSigmaTD16ChangePredictorTrainer
+
+        config = get_dct_sigma_td16_change_predictor_config()
+        name = args.experiment_name or 'dct_sigma_td16_change_predictor_baseline'
+        _apply_overrides(config, args)
+        trainer = DCTSigmaTD16ChangePredictorTrainer(
+            config=config, experiment_name=name)
+
+    elif args.method == 'dct_sigma_td16_spatial_change_predictor':
+        from src.configs import get_dct_sigma_td16_spatial_change_predictor_config
+        from src.trainers import DCTSigmaTD16SpatialChangePredictorTrainer
+
+        config = get_dct_sigma_td16_spatial_change_predictor_config()
+        name = args.experiment_name or 'dct_sigma_td16_spatial_change_predictor_baseline'
+        _apply_overrides(config, args)
+        trainer = DCTSigmaTD16SpatialChangePredictorTrainer(
+            config=config, experiment_name=name)
+
+    elif args.method == 'dct_sigma_td16_conditional_predictor':
+        from src.configs import get_dct_sigma_td16_conditional_predictor_config
+        from src.trainers import DCTSigmaTD16ConditionalPredictorTrainer
+
+        config = get_dct_sigma_td16_conditional_predictor_config()
+        name = args.experiment_name or 'dct_sigma_td16_conditional_predictor_baseline'
+        _apply_overrides(config, args)
+        trainer = DCTSigmaTD16ConditionalPredictorTrainer(
+            config=config, experiment_name=name)
+
+    elif args.method == 'dct_sigma_td16_mask_predictor':
+        from src.configs import get_dct_sigma_td16_mask_predictor_config
+        from src.trainers import DCTSigmaTD16MaskPredictorTrainer
+
+        config = get_dct_sigma_td16_mask_predictor_config()
+        name = args.experiment_name or 'dct_sigma_td16_mask_predictor_baseline'
+        _apply_overrides(config, args)
+        trainer = DCTSigmaTD16MaskPredictorTrainer(
+            config=config, experiment_name=name)
+
+    elif args.method == 'dct_sigma_residual_predictor':
+        from src.configs import get_dct_sigma_residual_predictor_config
+        from src.trainers import DCTSigmaResidualPredictorTrainer
+
+        config = get_dct_sigma_residual_predictor_config()
+        name = args.experiment_name or 'dct_sigma_residual_predictor_baseline'
+        _apply_overrides(config, args)
+        trainer = DCTSigmaResidualPredictorTrainer(
+            config=config, experiment_name=name)
+
+    elif args.method == 'dct_sigma_hybrid_predictor':
+        from src.configs import get_dct_sigma_hybrid_predictor_config
+        from src.trainers import DCTSigmaHybridPredictorTrainer
+
+        config = get_dct_sigma_hybrid_predictor_config()
+        name = args.experiment_name or 'dct_sigma_hybrid_predictor_baseline'
+        _apply_overrides(config, args)
+        trainer = DCTSigmaHybridPredictorTrainer(
+            config=config, experiment_name=name)
+
+    elif args.method == 'atlas_sigma_predictor':
+        from src.configs import get_atlas_sigma_predictor_config
+        from src.trainers import AtlasSigmaPredictorTrainer
+
+        config = get_atlas_sigma_predictor_config()
+        name = args.experiment_name or 'atlas_sigma_predictor_baseline'
+        _apply_overrides(config, args)
+        trainer = AtlasSigmaPredictorTrainer(
+            config=config, experiment_name=name)
+
+    elif args.method == 'fc_sigmaunet':
+        from src.configs import get_fc_sigmaunet_config
+        from src.trainers import FCSigmaUNetTrainer
+
+        config = get_fc_sigmaunet_config()
+        name = args.experiment_name or 'fc_sigmaunet_baseline'
+        _apply_overrides(config, args)
+        trainer = FCSigmaUNetTrainer(config=config, experiment_name=name)
 
     else:
         print(f'Unknown method: {args.method}')
@@ -348,6 +517,30 @@ def _apply_overrides(config, args):
         config.model.coeff_size = args.coeff_size
     if args.coeff_loss_weight is not None:
         config.training.coeff_loss_weight = args.coeff_loss_weight
+    if args.focus_loss_weight is not None:
+        config.training.focus_loss_weight = args.focus_loss_weight
+    if args.focus_threshold is not None:
+        config.training.focus_threshold = args.focus_threshold
+    if args.inactive_weight is not None:
+        config.training.inactive_weight = args.inactive_weight
+    if args.pred_l1_weight is not None:
+        config.training.pred_l1_weight = args.pred_l1_weight
+    if args.active_region_threshold is not None:
+        config.training.active_region_threshold = args.active_region_threshold
+    if args.change_threshold is not None:
+        config.training.change_threshold = args.change_threshold
+    if args.lambda_gate is not None:
+        config.training.lambda_gate = args.lambda_gate
+    if args.lambda_mask is not None:
+        config.training.lambda_mask = args.lambda_mask
+    if args.lambda_mask_coeff is not None:
+        config.training.lambda_mask_coeff = args.lambda_mask_coeff
+    if args.mask_threshold is not None:
+        config.training.mask_threshold = args.mask_threshold
+    if args.mask_teacher_forcing_ratio is not None:
+        config.training.mask_teacher_forcing_ratio = args.mask_teacher_forcing_ratio
+    if args.active_oversample_factor is not None:
+        config.training.active_oversample_factor = args.active_oversample_factor
     if args.ce_weight is not None:
         config.training.ce_weight = args.ce_weight
     if args.dice_weight is not None:
@@ -356,6 +549,8 @@ def _apply_overrides(config, args):
         config.model.dropout = args.dropout
     if args.fixed_level is not None:
         config.training.fixed_level = args.fixed_level
+    if args.score_probe_freq is not None:
+        config.training.score_probe_freq = args.score_probe_freq
     if args.score_probe_max_samples is not None:
         config.training.score_probe_max_samples = args.score_probe_max_samples
 

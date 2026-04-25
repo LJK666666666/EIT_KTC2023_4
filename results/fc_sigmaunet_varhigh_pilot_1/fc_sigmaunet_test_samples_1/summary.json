@@ -1,0 +1,7 @@
+{
+  "weights_dir": "results\\fc_sigmaunet_varhigh_pilot_1",
+  "hdf5_path": "dataset_lung_varhigh\\level_1\\data.h5",
+  "split": "test",
+  "method": "fc_sigmaunet",
+  "num_samples": 8
+}

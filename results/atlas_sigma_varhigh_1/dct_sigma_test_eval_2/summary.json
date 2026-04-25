@@ -1,0 +1,11 @@
+{
+  "weights_dir": "results\\atlas_sigma_varhigh_1",
+  "hdf5_path": "dataset_lung_varhigh\\level_1\\data.h5",
+  "split": "test",
+  "method": "atlas_sigma_predictor",
+  "num_samples": 52,
+  "mae_mean": 0.16160692824785355,
+  "rmse_mean": 0.2363980064770274,
+  "rel_l2_mean": 0.29717858302829664,
+  "reconstruction_time_sec": 0.673283576965332
+}

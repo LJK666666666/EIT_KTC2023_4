@@ -38,9 +38,18 @@ class EITFEM:
         self.nH2 = Mesh2.H.shape[0]
         self.ng2 = Mesh2.g.shape[0]
 
-        self.vincl = vincl if vincl is not None else np.ones((len(Mesh2)*len(Mesh2)), dtype=bool)
-        self.mincl = np.array(vincl)
-        self.mincl.shape = (self.Nel-1,self.Inj.shape[1])
+        self.n_meas_per_pattern = (
+            int(Mpat.shape[1]) if Mpat is not None else (self.Nel - 1)
+        )
+        if vincl is None:
+            self.vincl = np.ones(
+                (self.n_meas_per_pattern, self.Inj.shape[1]), dtype=bool
+            )
+        else:
+            self.vincl = vincl
+        self.mincl = np.asarray(self.vincl, dtype=bool).reshape(
+            self.n_meas_per_pattern, self.Inj.shape[1]
+        )
 
         self.use_gpu = use_gpu
         if use_gpu:

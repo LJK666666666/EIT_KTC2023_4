@@ -1,0 +1,10 @@
+{
+  "hdf5_path": "dataset_lung_2k\\level_1\\data.h5",
+  "split_ratio": "8:1:1",
+  "seed": 1,
+  "split": "test",
+  "num_samples": 206,
+  "mae_mean": 0.13146590378754355,
+  "rmse_mean": 0.2025261409940265,
+  "rel_l2_mean": 0.25516298206620347
+}

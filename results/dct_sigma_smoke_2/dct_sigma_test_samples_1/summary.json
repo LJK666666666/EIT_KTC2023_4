@@ -1,0 +1,6 @@
+{
+  "weights_dir": "results\\dct_sigma_smoke_2",
+  "hdf5_path": "dataset_lung_pilot\\level_1\\data.h5",
+  "split": "test",
+  "num_samples": 3
+}

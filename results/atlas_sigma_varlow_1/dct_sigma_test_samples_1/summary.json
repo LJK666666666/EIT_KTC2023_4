@@ -1,0 +1,7 @@
+{
+  "weights_dir": "results\\atlas_sigma_varlow_1",
+  "hdf5_path": "dataset_lung_varlow\\level_1\\data.h5",
+  "split": "test",
+  "method": "atlas_sigma_predictor",
+  "num_samples": 8
+}

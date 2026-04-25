@@ -1,0 +1,11 @@
+{
+  "weights_dir": "results\\atlas_sigma_varlow_1",
+  "hdf5_path": "dataset_lung_varlow\\level_1\\data.h5",
+  "split": "test",
+  "method": "atlas_sigma_predictor",
+  "num_samples": 52,
+  "mae_mean": 0.09777501176937459,
+  "rmse_mean": 0.15542663223295605,
+  "rel_l2_mean": 0.20061580647265947,
+  "reconstruction_time_sec": 0.7088475227355957
+}

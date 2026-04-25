@@ -1,0 +1,17 @@
+{
+  "method": "dct_sigma_residual_predictor",
+  "weights_dir": "results\\dct_sigma_varlow_residual_1",
+  "hdf5_path": "dataset_lung_varlow\\level_1\\data.h5",
+  "split": "test",
+  "device": "cuda",
+  "num_params": 3763456,
+  "num_trainable_params": 3763456,
+  "single_latency_ms_mean": 1.6547100002450557,
+  "single_latency_ms_std": 0.23952116746923263,
+  "batch_size": 32,
+  "batch_latency_ms_mean": 12.131296666363292,
+  "batch_latency_ms_std": 2.4393488741856006,
+  "batch_per_sample_ms_mean": 0.3791030208238529,
+  "warmup": 5,
+  "repeats": 30
+}

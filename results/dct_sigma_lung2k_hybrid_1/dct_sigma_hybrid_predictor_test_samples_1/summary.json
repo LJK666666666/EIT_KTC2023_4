@@ -1,0 +1,7 @@
+{
+  "weights_dir": "results\\dct_sigma_lung2k_hybrid_1",
+  "hdf5_path": "dataset_lung_2k\\level_1\\data.h5",
+  "split": "test",
+  "method": "dct_sigma_hybrid_predictor",
+  "num_samples": 8
+}

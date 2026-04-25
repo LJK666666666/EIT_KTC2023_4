@@ -1,0 +1,13 @@
+{
+  "level": 1,
+  "num_images": 512,
+  "dataset_path": "dataset_lung_varlow/level_1/data.h5",
+  "avg_forward_ms": 98.2908084988594,
+  "avg_total_ms": 102.15606959536672,
+  "seed": 11,
+  "anatomy_scale": 0.6,
+  "pathology_scale": 0.6,
+  "detail_scale": 0.5,
+  "conductivity_scale": 0.8,
+  "texture_scale": 0.0
+}

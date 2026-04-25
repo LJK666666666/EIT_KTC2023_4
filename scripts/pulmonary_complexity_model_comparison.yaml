@@ -1,0 +1,19 @@
+lung_variability_summary: results/lung_variability_analysis_2/summary.json
+datasets:
+  low:
+    hdf5_path: dataset_lung_varlow/level_1/data.h5
+    direct_dir: results/dct_sigma_varlow_direct_1
+    residual_dir: results/dct_sigma_varlow_residual_1
+    hybrid_dir: results/dct_sigma_varlow_hybrid_1
+    atlas_decoder_dir: results/atlas_sigma_varlow_1
+    fc_sigmaunet_dir: results/fc_sigmaunet_varlow_pilot_1
+  high:
+    hdf5_path: dataset_lung_varhigh/level_1/data.h5
+    direct_dir: results/dct_sigma_varhigh_direct_1
+    residual_dir: results/dct_sigma_varhigh_residual_1
+    hybrid_dir: results/dct_sigma_varhigh_hybrid_1
+    atlas_decoder_dir: results/atlas_sigma_varhigh_1
+    fc_sigmaunet_dir: results/fc_sigmaunet_varhigh_pilot_1
+visualization:
+  split: test
+  sample_indices: [0, 1]

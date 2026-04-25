@@ -1,0 +1,32 @@
+{
+  "mask_weights_dir": "results\\dct_sigma_td16_mask_mixed_1",
+  "vae_predictor_dir": "results\\td16_vae_predictor_active_pilot_1",
+  "hdf5_path": "dataset_lung_td16_pilot\\level_1\\data.h5",
+  "split": "test",
+  "num_samples": 7,
+  "mask_metrics": {
+    "precision": 0.06622820484385142,
+    "recall": 0.29139781976172313,
+    "f1": 0.08918747112205296,
+    "iou": 0.054493039792126705,
+    "accuracy": 0.7773371104815865
+  },
+  "base_prediction": {
+    "mae_mean": 0.028786430070391555,
+    "rmse_mean": 0.0890992736207307,
+    "rel_l2_mean": 157880382.78821215,
+    "active_rel_l2_mean": 0.952476191703112
+  },
+  "external_soft_fusion": {
+    "mae_mean": 0.022575495218537325,
+    "rmse_mean": 0.08622229853383535,
+    "rel_l2_mean": 82882468.1196066,
+    "active_rel_l2_mean": 0.975314746160444
+  },
+  "external_hard_fusion": {
+    "mae_mean": 0.020333472959121055,
+    "rmse_mean": 0.08828456348848422,
+    "rel_l2_mean": 121857515.85881248,
+    "active_rel_l2_mean": 0.9750364263172635
+  }
+}

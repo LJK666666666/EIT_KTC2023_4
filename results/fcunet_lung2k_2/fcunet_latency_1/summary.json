@@ -1,0 +1,17 @@
+{
+  "method": "fcunet",
+  "weights_dir": "results\\fcunet_lung2k_2",
+  "hdf5_path": "dataset_lung_2k\\level_1\\data.h5",
+  "split": "test",
+  "device": "cuda",
+  "num_params": 40701699,
+  "num_trainable_params": 40701699,
+  "single_latency_ms_mean": 28.82152500678785,
+  "single_latency_ms_std": 0.5808426202478081,
+  "batch_size": 32,
+  "batch_latency_ms_mean": 467.19340500276303,
+  "batch_latency_ms_std": 22.644561247623102,
+  "batch_per_sample_ms_mean": 14.599793906336345,
+  "warmup": 10,
+  "repeats": 40
+}

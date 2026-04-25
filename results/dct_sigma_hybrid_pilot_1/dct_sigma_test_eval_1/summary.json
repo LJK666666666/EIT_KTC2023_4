@@ -1,0 +1,11 @@
+{
+  "weights_dir": "results\\dct_sigma_hybrid_pilot_1",
+  "hdf5_path": "dataset_lung_pilot\\level_1\\data.h5",
+  "split": "test",
+  "method": "dct_sigma_hybrid_predictor",
+  "num_samples": 52,
+  "mae_mean": 0.1287433476356092,
+  "rmse_mean": 0.2019488102990761,
+  "rel_l2_mean": 0.2523466547126164,
+  "reconstruction_time_sec": 0.46808576583862305
+}

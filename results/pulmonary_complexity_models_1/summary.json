@@ -1,0 +1,30 @@
+{
+  "datasets": {
+    "low": {
+      "atlas_rel_l2": 0.19902387026100177,
+      "oracle_atlas_residual_dct_k20_rel_l2": 0.14250838350257716,
+      "direct_rel_l2": 0.6943514821397943,
+      "residual_rel_l2": 0.2008364180320069,
+      "hybrid_rel_l2": 0.20124252805837736,
+      "direct_mae": 0.5028918219389096,
+      "residual_mae": 0.09773846912275672,
+      "hybrid_mae": 0.09806232729547466,
+      "direct_rmse": 0.5401168056568257,
+      "residual_rmse": 0.1555741033935873,
+      "hybrid_rmse": 0.1558060607655386
+    },
+    "high": {
+      "atlas_rel_l2": 0.29950704087330293,
+      "oracle_atlas_residual_dct_k20_rel_l2": 0.15839697399833774,
+      "direct_rel_l2": 0.722976374454309,
+      "residual_rel_l2": 0.2971319139954525,
+      "hybrid_rel_l2": 0.2972745389975052,
+      "direct_mae": 0.5238987991716387,
+      "residual_mae": 0.1613817913889448,
+      "hybrid_mae": 0.16137590863234752,
+      "direct_rmse": 0.579207700097418,
+      "residual_rmse": 0.23639559519700695,
+      "hybrid_rmse": 0.2363832466927069
+    }
+  }
+}

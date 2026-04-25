@@ -1,0 +1,85 @@
+{
+  "dataset_path": "dataset_lung_2k/level_1/data.h5",
+  "split": "test",
+  "num_total": 2048,
+  "num_train": 1638,
+  "num_eval": 128,
+  "atlas_baseline": {
+    "mae_mean": 0.13402376742949274,
+    "rmse_mean": 0.20496660228761115,
+    "rel_l2_mean": 0.25827130076894134,
+    "residual_ratio_mean": 0.25827130675315857,
+    "residual_ratio_std": 0.03310953825712204
+  },
+  "focus_fraction": {
+    "0.03": 0.49094367027282715,
+    "0.05": 0.41073739528656006,
+    "0.08": 0.31196725368499756,
+    "0.12": 0.16329121589660645
+  },
+  "dct_curves": [
+    {
+      "coeff_size": 4,
+      "direct_rel_l2_mean": 0.48512544999605844,
+      "atlas_res_rel_l2_mean": 0.23641299579152897,
+      "direct_rmse_mean": 0.3846675315888087,
+      "atlas_res_rmse_mean": 0.1876359645185147
+    },
+    {
+      "coeff_size": 8,
+      "direct_rel_l2_mean": 0.3033059545442161,
+      "atlas_res_rel_l2_mean": 0.21219891076245803,
+      "direct_rmse_mean": 0.24055612716241387,
+      "atlas_res_rmse_mean": 0.16837684268599634
+    },
+    {
+      "coeff_size": 12,
+      "direct_rel_l2_mean": 0.26297245754004533,
+      "atlas_res_rel_l2_mean": 0.1906429846884103,
+      "direct_rmse_mean": 0.20856354600102894,
+      "atlas_res_rmse_mean": 0.15127291802974024
+    },
+    {
+      "coeff_size": 16,
+      "direct_rel_l2_mean": 0.22424155593454753,
+      "atlas_res_rel_l2_mean": 0.17309702841960622,
+      "direct_rmse_mean": 0.1777643023723869,
+      "atlas_res_rmse_mean": 0.1372976909286947
+    },
+    {
+      "coeff_size": 20,
+      "direct_rel_l2_mean": 0.19954237763402102,
+      "atlas_res_rel_l2_mean": 0.15963826640754686,
+      "direct_rmse_mean": 0.15820973519224626,
+      "atlas_res_rmse_mean": 0.12660224085051197
+    },
+    {
+      "coeff_size": 24,
+      "direct_rel_l2_mean": 0.18173560675039824,
+      "atlas_res_rel_l2_mean": 0.1491756683462126,
+      "direct_rmse_mean": 0.14411009376432027,
+      "atlas_res_rmse_mean": 0.11832084868964585
+    },
+    {
+      "coeff_size": 32,
+      "direct_rel_l2_mean": 0.15551269207796203,
+      "atlas_res_rel_l2_mean": 0.12977536418064742,
+      "direct_rmse_mean": 0.12332781172352514,
+      "atlas_res_rmse_mean": 0.10292787449917776
+    },
+    {
+      "coeff_size": 48,
+      "direct_rel_l2_mean": 0.12579936775211523,
+      "atlas_res_rel_l2_mean": 0.10612363088280363,
+      "direct_rmse_mean": 0.09977842726903269,
+      "atlas_res_rmse_mean": 0.08417931124835565
+    },
+    {
+      "coeff_size": 64,
+      "direct_rel_l2_mean": 0.1081979577540661,
+      "atlas_res_rel_l2_mean": 0.09177029556980026,
+      "direct_rmse_mean": 0.08581513757609838,
+      "atlas_res_rmse_mean": 0.0727930905592022
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "weights_dir": "results\\dct_sigma_td16_spatial_active_1",
+  "hdf5_path": "dataset_lung_td16_active\\level_1\\data.h5",
+  "split": "test",
+  "model_kind": "spatial",
+  "num_samples": 7,
+  "active_threshold": 0.02,
+  "mask_threshold": 0.02,
+  "standard": {
+    "mae_mean": 0.04102643985911498,
+    "rmse_mean": 0.13135873008962126,
+    "rel_l2_mean": 87560445.5266808,
+    "active_rel_l2_mean": 0.9462562179169519
+  },
+  "oracle_output_mask": {
+    "mae_mean": 0.023066244170430985,
+    "rmse_mean": 0.11874186128788027,
+    "rel_l2_mean": 0.7733734824113012,
+    "active_rel_l2_mean": 0.9022690628131849
+  },
+  "oracle_condition_and_mask": {
+    "mae_mean": 0.023066244170430985,
+    "rmse_mean": 0.11874186128788027,
+    "rel_l2_mean": 0.7733734824113012,
+    "active_rel_l2_mean": 0.9022690628131849
+  },
+  "diagnostic_time_sec": 0.035469770431518555
+}

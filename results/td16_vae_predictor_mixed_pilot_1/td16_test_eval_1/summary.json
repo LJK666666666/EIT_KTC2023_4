@@ -1,0 +1,13 @@
+{
+  "weights_dir": "results\\td16_vae_predictor_mixed_pilot_1",
+  "hdf5_path": "dataset_lung_td16_pilot\\level_1\\data.h5",
+  "split": "test",
+  "method": "td16_vae_predictor",
+  "num_samples": 7,
+  "mae_mean": 0.017599462116380984,
+  "rmse_mean": 0.08414195010492068,
+  "rel_l2_mean": 14305747.743881362,
+  "active_rel_l2_mean": 0.9983931862595915,
+  "zero_delta_fraction": 0.42857142857142855,
+  "reconstruction_time_sec": 0.253864049911499
+}

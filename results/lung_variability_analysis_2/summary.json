@@ -1,0 +1,185 @@
+{
+  "num_samples": 256,
+  "presets": {
+    "low": {
+      "config": {
+        "anatomy_scale": 0.6,
+        "pathology_scale": 0.6,
+        "detail_scale": 0.5,
+        "conductivity_scale": 0.8,
+        "texture_scale": 0.0
+      },
+      "atlas_rel_l2_mean": 0.19902387026100177,
+      "atlas_rmse_mean": 0.15653596023611832,
+      "residual_ratio_mean": 0.19902387261390686,
+      "residual_ratio_std": 0.02502508834004402,
+      "curves": [
+        {
+          "coeff_size": 4,
+          "direct_rel_l2_mean": 0.4866486081344191,
+          "atlas_res_rel_l2_mean": 0.18444127487058162
+        },
+        {
+          "coeff_size": 8,
+          "direct_rel_l2_mean": 0.2981673996200263,
+          "atlas_res_rel_l2_mean": 0.17065608317605324
+        },
+        {
+          "coeff_size": 12,
+          "direct_rel_l2_mean": 0.26407768448933966,
+          "atlas_res_rel_l2_mean": 0.15950368790770855
+        },
+        {
+          "coeff_size": 16,
+          "direct_rel_l2_mean": 0.22306175469226885,
+          "atlas_res_rel_l2_mean": 0.15005751187619354
+        },
+        {
+          "coeff_size": 20,
+          "direct_rel_l2_mean": 0.2000040009181496,
+          "atlas_res_rel_l2_mean": 0.14250838350257716
+        },
+        {
+          "coeff_size": 24,
+          "direct_rel_l2_mean": 0.18253098896384073,
+          "atlas_res_rel_l2_mean": 0.13575899028599014
+        },
+        {
+          "coeff_size": 32,
+          "direct_rel_l2_mean": 0.15603878808454155,
+          "atlas_res_rel_l2_mean": 0.12295666922123126
+        },
+        {
+          "coeff_size": 48,
+          "direct_rel_l2_mean": 0.12603217487486826,
+          "atlas_res_rel_l2_mean": 0.10433028277154138
+        },
+        {
+          "coeff_size": 64,
+          "direct_rel_l2_mean": 0.10845378788486772,
+          "atlas_res_rel_l2_mean": 0.09145137505761236
+        }
+      ]
+    },
+    "medium": {
+      "config": {
+        "anatomy_scale": 1.0,
+        "pathology_scale": 1.0,
+        "detail_scale": 1.0,
+        "conductivity_scale": 1.0,
+        "texture_scale": 0.0
+      },
+      "atlas_rel_l2_mean": 0.25682092245902305,
+      "atlas_rmse_mean": 0.20361142848332292,
+      "residual_ratio_mean": 0.2568209171295166,
+      "residual_ratio_std": 0.03537355363368988,
+      "curves": [
+        {
+          "coeff_size": 4,
+          "direct_rel_l2_mean": 0.4829147623452748,
+          "atlas_res_rel_l2_mean": 0.234787408600919
+        },
+        {
+          "coeff_size": 8,
+          "direct_rel_l2_mean": 0.30290795551804106,
+          "atlas_res_rel_l2_mean": 0.21172694310214885
+        },
+        {
+          "coeff_size": 12,
+          "direct_rel_l2_mean": 0.26324013616396946,
+          "atlas_res_rel_l2_mean": 0.19068632594756027
+        },
+        {
+          "coeff_size": 16,
+          "direct_rel_l2_mean": 0.22451448716628325,
+          "atlas_res_rel_l2_mean": 0.17307813236427383
+        },
+        {
+          "coeff_size": 20,
+          "direct_rel_l2_mean": 0.199558174752056,
+          "atlas_res_rel_l2_mean": 0.15947412128946228
+        },
+        {
+          "coeff_size": 24,
+          "direct_rel_l2_mean": 0.18151522767073874,
+          "atlas_res_rel_l2_mean": 0.14888820439059064
+        },
+        {
+          "coeff_size": 32,
+          "direct_rel_l2_mean": 0.15561337351207144,
+          "atlas_res_rel_l2_mean": 0.1297608195796076
+        },
+        {
+          "coeff_size": 48,
+          "direct_rel_l2_mean": 0.12569322336324512,
+          "atlas_res_rel_l2_mean": 0.1059777219510787
+        },
+        {
+          "coeff_size": 64,
+          "direct_rel_l2_mean": 0.10807461957436021,
+          "atlas_res_rel_l2_mean": 0.09155919972827242
+        }
+      ]
+    },
+    "high": {
+      "config": {
+        "anatomy_scale": 1.6,
+        "pathology_scale": 1.6,
+        "detail_scale": 1.5,
+        "conductivity_scale": 1.25,
+        "texture_scale": 0.35
+      },
+      "atlas_rel_l2_mean": 0.29950704087330293,
+      "atlas_rmse_mean": 0.23878300395348595,
+      "residual_ratio_mean": 0.2995070219039917,
+      "residual_ratio_std": 0.051645923405885696,
+      "curves": [
+        {
+          "coeff_size": 4,
+          "direct_rel_l2_mean": 0.46641074447384434,
+          "atlas_res_rel_l2_mean": 0.26836591139087407
+        },
+        {
+          "coeff_size": 8,
+          "direct_rel_l2_mean": 0.29871073772440015,
+          "atlas_res_rel_l2_mean": 0.2310072395394373
+        },
+        {
+          "coeff_size": 12,
+          "direct_rel_l2_mean": 0.25019354119700987,
+          "atlas_res_rel_l2_mean": 0.1990228111248124
+        },
+        {
+          "coeff_size": 16,
+          "direct_rel_l2_mean": 0.216488200085643,
+          "atlas_res_rel_l2_mean": 0.175489469601247
+        },
+        {
+          "coeff_size": 20,
+          "direct_rel_l2_mean": 0.19275282643596642,
+          "atlas_res_rel_l2_mean": 0.15839697399833774
+        },
+        {
+          "coeff_size": 24,
+          "direct_rel_l2_mean": 0.17423333199244634,
+          "atlas_res_rel_l2_mean": 0.14584039617990643
+        },
+        {
+          "coeff_size": 32,
+          "direct_rel_l2_mean": 0.15031502141910333,
+          "atlas_res_rel_l2_mean": 0.12500399680437252
+        },
+        {
+          "coeff_size": 48,
+          "direct_rel_l2_mean": 0.12119299150865415,
+          "atlas_res_rel_l2_mean": 0.10116909725504573
+        },
+        {
+          "coeff_size": 64,
+          "direct_rel_l2_mean": 0.10412785623474005,
+          "atlas_res_rel_l2_mean": 0.08722309327520902
+        }
+      ]
+    }
+  }
+}

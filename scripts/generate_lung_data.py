@@ -61,6 +61,16 @@ def main():
     parser.add_argument('--preview-count', type=int, default=8)
     parser.add_argument('--seed', type=int, default=1)
     parser.add_argument('--start-idx', type=int, default=0)
+    parser.add_argument('--anatomy-scale', type=float, default=1.0,
+                        help='Scale of anatomical pose/shape variation')
+    parser.add_argument('--pathology-scale', type=float, default=1.0,
+                        help='Scale of collapse/effusion severity')
+    parser.add_argument('--detail-scale', type=float, default=1.0,
+                        help='Scale of small local structural variation')
+    parser.add_argument('--conductivity-scale', type=float, default=1.0,
+                        help='Scale of class-wise conductivity range variation')
+    parser.add_argument('--texture-scale', type=float, default=0.0,
+                        help='Scale of smooth intra-region conductivity texture')
     parser.add_argument('--save-sigma', action='store_true',
                         help='Save conductivity maps in HDF5')
     args = parser.parse_args()
@@ -109,8 +119,18 @@ def main():
 
         for i in tqdm(range(args.num_images), desc=f'Lung level {args.level}'):
             t_total = time.time()
-            phantom = create_lung_phantom(rng=rng)
-            sigma = create_lung_conductivity(phantom, rng=rng)
+            phantom = create_lung_phantom(
+                rng=rng,
+                anatomy_scale=args.anatomy_scale,
+                pathology_scale=args.pathology_scale,
+                detail_scale=args.detail_scale,
+            )
+            sigma = create_lung_conductivity(
+                phantom,
+                rng=rng,
+                conductivity_scale=args.conductivity_scale,
+                texture_scale=args.texture_scale,
+            )
             sigma_mesh = image_to_mesh(np.flipud(sigma).T, mesh)
 
             t0 = time.time()
@@ -137,6 +157,11 @@ def main():
         'avg_forward_ms': float(np.mean(forward_times) * 1000.0),
         'avg_total_ms': float(np.mean(total_times) * 1000.0),
         'seed': args.seed,
+        'anatomy_scale': args.anatomy_scale,
+        'pathology_scale': args.pathology_scale,
+        'detail_scale': args.detail_scale,
+        'conductivity_scale': args.conductivity_scale,
+        'texture_scale': args.texture_scale,
     }
     with open(base_path / 'dataset_info.json', 'w', encoding='utf-8') as f:
         json.dump(info, f, indent=2, ensure_ascii=False)

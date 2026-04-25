@@ -1,0 +1,22 @@
+{
+  "split": "test",
+  "num_samples": 7,
+  "predictor_dir": "results\\td16_vae_predictor_active_pilot_1",
+  "vae_checkpoint": "results\\td16_vae_active_pilot_2\\best.pt",
+  "predictor_metrics": {
+    "mae": 0.03848281452353197,
+    "rmse": 0.13148468280302422,
+    "rel_l2": 54140158.297710225,
+    "rel_l2_nonzero": 0.9790588120619456,
+    "active_rel_l2": 0.9691557715769853
+  },
+  "autoencoder_metrics": {
+    "mae": 0.048809259828580025,
+    "rmse": 0.11889657907284974,
+    "rel_l2": 30920084.388965044,
+    "rel_l2_nonzero": 0.8934241930643717,
+    "active_rel_l2": 0.7587281708777195
+  },
+  "rmse_gap": 0.01258810373017448,
+  "active_rel_l2_gap": 0.2104276006992658
+}

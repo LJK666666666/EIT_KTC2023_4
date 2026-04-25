@@ -1,0 +1,10 @@
+{
+  "weights_dir": "results\\dct_sigma_smoke_2",
+  "hdf5_path": "dataset_lung_pilot\\level_1\\data.h5",
+  "split": "test",
+  "num_samples": 52,
+  "mae_mean": 0.7188098242078309,
+  "rmse_mean": 0.78359161605948,
+  "rel_l2_mean": 0.9808226835690221,
+  "reconstruction_time_sec": 0.3157963752746582
+}

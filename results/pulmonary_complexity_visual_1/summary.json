@@ -1,0 +1,20 @@
+{
+  "rows": [
+    {
+      "level": "low",
+      "sample_id": 431
+    },
+    {
+      "level": "low",
+      "sample_id": 115
+    },
+    {
+      "level": "high",
+      "sample_id": 431
+    },
+    {
+      "level": "high",
+      "sample_id": 115
+    }
+  ]
+}
